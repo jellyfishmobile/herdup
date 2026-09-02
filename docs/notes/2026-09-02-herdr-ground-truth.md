@@ -62,9 +62,38 @@ unreachable even by mistake.
    from the JSON-returning list.
 4. Pane numbering is **workspace-scoped**, not tab-scoped: a pane created in a
    second tab was `w1:p3`.
-5. `cwd` is returned with a trailing separator in `workspace create`
-   (`D:\work\herdr_automation\`) but without one in `pane get`. Normalise before
-   comparing.
+5. **`cwd` has two forms for the same directory, and it is pane *state* that
+   decides — not which command you call.** Corrected 2026-09-02 while writing the
+   Phase 1 tests; an earlier version of this note wrongly attributed it to the
+   command. Pane `w1:p1`, same directory, two `pane get` captures:
+
+   | Pane state | `cwd` |
+   |---|---|
+   | freshly created, idle shell | `D:\work\herdr_automation\` |
+   | `claude` running in it | `D:\work\herdr_automation` |
+
+   `pane list` and `workspace create` return the trailing-separator form for an
+   idle pane. Always normalise before comparing — `Pane::cwd_path()` does this.
+
+6. **Success envelopes go to stdout; API error envelopes go to *stderr*.**
+   Found in Phase 1, not Phase 0 — every capture in the original spike used
+   `2>&1`, which merged the streams and hid the distinction. Verified on 0.8.2 by
+   redirecting each stream to its own file:
+
+   | Stream | Content on an API error |
+   |---|---|
+   | stdout | *(0 bytes)* |
+   | stderr | `{"id":"cli:workspace:list","error":{"code":"server_not_running",...}}` |
+
+   Exit code is 1 in both success-with-error-body and timeout cases, so **the
+   JSON body is authoritative and the exit code is only a fallback**.
+
+   This cost a real bug: a parser reading stdout alone degraded every API error
+   to a generic "command failed", which made `server_running()` report a dead
+   server as alive, so the caller never started one. The parser now checks both
+   streams.
+
+   *Method lesson: capture streams separately when recording ground truth.*
 
 ## 4. The critical finding: `idle` does not mean "safe to brief"
 

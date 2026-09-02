@@ -97,8 +97,21 @@ The single module that knows herdr's command shapes.
 briefings containing spaces, quotes, and non-ASCII; each error variant is produced
 by the matching fake-herdr failure.
 
-**Exit** — `herdr_cli` drives a real herdr end to end from a scratch test, and the
-whole suite passes against the fake with no herdr installed.
+**Exit — COMPLETE 2026-09-02.**
+
+- [x] 27 tests green: 18 against `fake-herdr`, 9 parsing the Phase 0 fixtures.
+      None require herdr to be installed.
+- [x] `launcher-cli smoke` drives real herdr 0.8.2 end to end — create workspace,
+      split, rename, list, verify cwd normalisation, verify ID monotonicity,
+      close — in a disposable named session it creates and destroys.
+- [x] `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` clean.
+
+**Bug found and fixed during this phase:** herdr writes success envelopes to
+stdout but **API error envelopes to stderr**. Phase 0 missed it because every
+capture used `2>&1`. A parser reading stdout alone turned every API error into a
+generic "command failed", which made `server_running()` report a dead server as
+alive — so `smoke` skipped starting one and then failed. Both streams are now
+parsed, with regression tests for each.
 
 ---
 
