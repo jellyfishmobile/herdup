@@ -7,6 +7,7 @@
 //!   probe  — find herdr, report its version, check the minimum
 //!   smoke  — drive a real herdr end to end in a disposable named session
 
+use launcher_core::config::ConfigError;
 use launcher_core::herdr::types::SplitDirection;
 use launcher_core::herdr::{HerdrCli, HerdrError, MIN_HERDR};
 use std::path::{Path, PathBuf};
@@ -14,10 +15,39 @@ use std::time::{Duration, Instant};
 
 const DEFAULT_SMOKE_SESSION: &str = "herdup-smoke";
 
+/// Either failure mode a subcommand can hit.
+#[derive(Debug)]
+enum AppError {
+    Herdr(HerdrError),
+    Config(ConfigError),
+}
+
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppError::Herdr(e) => write!(f, "{e}"),
+            AppError::Config(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl From<HerdrError> for AppError {
+    fn from(e: HerdrError) -> Self {
+        AppError::Herdr(e)
+    }
+}
+
+impl From<ConfigError> for AppError {
+    fn from(e: ConfigError) -> Self {
+        AppError::Config(e)
+    }
+}
+
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("probe") => probe(),
+        Some("config") => config(),
         Some("smoke") => smoke(&args[1..]),
         Some("help") | Some("--help") | Some("-h") | None => {
             usage();
@@ -34,7 +64,7 @@ fn main() -> std::process::ExitCode {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("\nerror: {e}");
-            if let HerdrError::ProtocolMismatch { .. } = e {
+            if let AppError::Herdr(HerdrError::ProtocolMismatch { .. }) = e {
                 eprintln!(
                     "\nThis usually means a herdr server from an older binary is still running.\n\
                      Restarting it exits its pane processes, so herdup will not do it for you."
@@ -50,13 +80,14 @@ fn usage() {
         "herdup harness\n\n\
          usage:\n  \
          launcher-cli probe\n  \
+         launcher-cli config\n  \
          launcher-cli smoke [--session NAME] [--cwd PATH]\n\n\
          `smoke` creates and destroys an isolated named session. It never touches\n\
          your default herdr session, whose panes may be real work."
     );
 }
 
-fn probe() -> Result<(), HerdrError> {
+fn probe() -> Result<(), AppError> {
     let cli = HerdrCli::discover()?;
     println!("herdr binary : {}", cli.exe().display());
 
@@ -73,7 +104,8 @@ fn probe() -> Result<(), HerdrError> {
         return Err(HerdrError::VersionTooOld {
             found: version.to_string(),
             required: min,
-        });
+        }
+        .into());
     }
 
     match cli.workspace_list() {
@@ -89,7 +121,75 @@ fn probe() -> Result<(), HerdrError> {
     Ok(())
 }
 
-fn smoke(args: &[String]) -> Result<(), HerdrError> {
+fn config() -> Result<(), AppError> {
+    let dir = launcher_core::config::config_dir();
+    match &dir {
+        Some(d) => {
+            println!("config dir : {}", d.display());
+            for name in ["registry.toml", "templates.toml"] {
+                let p = d.join(name);
+                println!(
+                    "  {name:<15} {}",
+                    if p.is_file() {
+                        "user overrides found"
+                    } else {
+                        "(none — using built-ins)"
+                    }
+                );
+            }
+        }
+        None => println!("config dir : unavailable; built-ins only"),
+    }
+
+    let registry = launcher_core::config::load_registry()?;
+    let templates = launcher_core::config::load_templates(&registry)?;
+
+    println!("\nCLIs ({}):", registry.len());
+    println!("  ID               NAME                   BINARY         BRIEFING");
+    for e in registry.iter() {
+        println!(
+            "  {:<16} {:<22} {:<14} {}",
+            e.id,
+            e.display_name,
+            e.binary,
+            if e.briefing_trust.may_auto_brief() {
+                "verified — auto"
+            } else {
+                "manual"
+            }
+        );
+    }
+    println!(
+        "\n  Only 'verified' CLIs are briefed automatically. Everything else waits\n  \
+         for you to look at the pane first (spec §5.1)."
+    );
+
+    println!("\nTemplates ({}):", templates.len());
+    for t in templates.iter() {
+        let roles: Vec<String> = t
+            .panes
+            .iter()
+            .map(|p| {
+                if p.coordinator {
+                    format!("{}*", p.role)
+                } else {
+                    p.role.clone()
+                }
+            })
+            .collect();
+        println!(
+            "  {:<12} {} pane(s): {}",
+            t.id,
+            t.panes.len(),
+            roles.join(", ")
+        );
+        println!("               {}", t.description);
+    }
+    println!("\n  * coordinator — created first, briefed last with the finished roster.");
+    Ok(())
+}
+
+fn smoke(args: &[String]) -> Result<(), AppError> {
     let session = flag(args, "--session").unwrap_or_else(|| DEFAULT_SMOKE_SESSION.to_string());
     let cwd = flag(args, "--cwd")
         .map(PathBuf::from)

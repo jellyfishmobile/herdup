@@ -9,6 +9,7 @@ description = "herdup core: typed wrapper over the herdr CLI"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 thiserror.workspace = true
 
 # Test double used by the integration tests. Built as a real binary so tests can

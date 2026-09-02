@@ -138,7 +138,25 @@ Pure data. No process spawning.
 invariant violation produces its specific error; every built-in template loads
 and validates; every built-in `cli` id resolves to a registry entry.
 
-**Exit** — configs load, merge, and validate; malformed input fails legibly.
+**Exit — COMPLETE 2026-09-02.**
+
+- [x] 18 registry entries, keyed to herdr's manifest ids, with a test asserting
+      the set matches exactly.
+- [x] 4 templates (solo/duo/squad/full-team), all six role briefings written.
+- [x] Field-level user merge for the registry; whole-template replacement for
+      templates. Unknown keys rejected naming both the file and the bad key.
+- [x] All six layout invariants enforced with their own error variant and test.
+- [x] On-disk loading from `%APPDATA%\herdup\` / `~/Library/Application Support/herdup/`,
+      with a missing directory falling back to built-ins rather than failing.
+- [x] `launcher-cli config` prints the merged result. 29 config tests; 56 total.
+      clippy `-D warnings` and `fmt --check` clean.
+
+**Judgement call recorded:** `binary` ships best-effort base names for the 14
+CLIs not present on the dev machine, while `flag_presets` and `briefing_trust`
+ship empty/`manual` for everything unverified. The asymmetry is deliberate — a
+wrong base name fails loudly and harmlessly at preflight and is fixed by editing
+one field, whereas a wrong permission flag or trust tier fails *silently* and
+could disable a sandbox or type into a live prompt. Tests enforce both halves.
 
 ---
 

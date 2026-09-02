@@ -1,0 +1,156 @@
+# herdup built-in CLI registry
+#
+# Table keys match herdr's own agent-manifest ids (src/detect/manifests/*.toml),
+# so a pane herdup launches is attributed to the right agent in herdr's sidebar.
+#
+# ---------------------------------------------------------------------------
+# What is guessed here, and what is never guessed
+# ---------------------------------------------------------------------------
+#
+# `binary` is BEST-EFFORT for CLIs we have not run ourselves. That is safe: a
+# wrong base name fails loudly and harmlessly at preflight ("codex: not found"),
+# and the user fixes it by editing one field. Verified on a real machine so far:
+# claude, gemini, kimi, hermes.
+#
+# `flag_presets` and `briefing_trust` are NEVER guessed, because their failures
+# are silent and dangerous:
+#   - a wrong permission flag could disable someone's sandbox without saying so
+#   - a wrong briefing_trust would let herdup type into a live prompt (spec §5.1)
+# Both therefore ship empty/`manual` except where reproduced by hand.
+#
+# `docs_url` values come from herdr's own README agent table.
+#
+# briefing_trust:
+#   "verified" — we reproduced the blocked -> idle transition for this CLI.
+#                herdup may auto-send a briefing when the pane reports idle.
+#   "manual"   — the default. Never auto-briefed; a human reviews the pane and
+#                clicks Send briefing. Phase 0 caught Gemini CLI reporting idle
+#                behind a blocking modal, which is why this is the default.
+
+[claude]
+display_name = "Claude Code"
+binary = "claude"                                   # verified: ~/.local/bin/claude.exe
+docs_url = "https://code.claude.com/docs/en/setup"
+flag_presets = ["--permission-mode bypassPermissions", "--permission-mode acceptEdits", ""]
+briefing_trust = "verified"                         # reproduced 2026-09-02, herdr 0.8.2
+[claude.install_hint]
+windows = "irm https://claude.ai/install.ps1 | iex"
+unix = "curl -fsSL https://claude.ai/install.sh | bash"
+
+[codex]
+display_name = "Codex"
+binary = "codex"
+docs_url = "https://github.com/openai/codex"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[droid]
+display_name = "Droid"
+binary = "droid"
+docs_url = "https://factory.ai"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[amp]
+display_name = "Amp"
+binary = "amp"
+docs_url = "https://ampcode.com"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[opencode]
+display_name = "opencode"
+binary = "opencode"
+docs_url = "https://github.com/anomalyco/opencode"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[cursor]
+display_name = "Cursor Agent"
+binary = "cursor-agent"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[github-copilot]
+display_name = "GitHub Copilot CLI"
+binary = "copilot"
+docs_url = "https://github.com/features/copilot"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[gemini]
+display_name = "Gemini CLI"
+binary = "gemini"                                   # verified: npm shim, gemini.ps1
+flag_presets = [""]
+# Phase 0 observed this CLI reporting `idle` while a blocking trust modal was on
+# screen, and a test briefing selected "Trust folder". Do not promote without
+# re-testing. herdr's README lists it as "detected but not fully tested".
+briefing_trust = "manual"
+
+[kimi]
+display_name = "Kimi Code CLI"
+binary = "kimi"                                     # verified: ~/.kimi-code/bin/kimi.exe
+flag_presets = [""]
+briefing_trust = "manual"
+
+[hermes]
+display_name = "Hermes Agent"
+binary = "hermes"                                   # verified: hermes-agent venv
+docs_url = "https://github.com/NousResearch/hermes-agent"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[kilo]
+display_name = "Kilo Code CLI"
+binary = "kilo"
+docs_url = "https://kilo.ai/"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[grok]
+display_name = "Grok CLI"
+binary = "grok"
+docs_url = "https://x.ai/grok"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[devin]
+display_name = "Devin CLI"
+binary = "devin"
+docs_url = "https://docs.devin.ai/cli"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[pi]
+display_name = "pi"
+binary = "pi"
+docs_url = "https://pi.dev"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[qodercli]
+display_name = "Qoder CLI"
+binary = "qodercli"
+docs_url = "https://qoder.com/cli"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[kiro]
+display_name = "Kiro CLI"
+binary = "kiro"
+docs_url = "https://kiro.dev/docs/cli/"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[antigravity]
+display_name = "Antigravity CLI"
+binary = "antigravity"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[cline]
+display_name = "Cline"
+binary = "cline"
+flag_presets = [""]
+# herdr's README lists this as "detected but not fully tested".
+briefing_trust = "manual"
