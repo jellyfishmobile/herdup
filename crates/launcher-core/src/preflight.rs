@@ -484,6 +484,23 @@ fn check_git(project: &Path) -> GitStatus {
     }
 }
 
+/// Platform caveats worth stating plainly, if any.
+///
+/// herdr's Windows builds are preview-only beta and default to the preview
+/// update channel — its own README says so. Someone trusting herdup with a real
+/// repository should know that the thing underneath it is beta, rather than
+/// discover it when something misbehaves.
+pub fn platform_note() -> Option<&'static str> {
+    if cfg!(windows) {
+        Some(
+            "herdr's Windows builds are preview-only beta and track the preview update \
+             channel. Linux and macOS have stable releases; Windows does not yet.",
+        )
+    } else {
+        None
+    }
+}
+
 /// Check the GitHub CLI. Only needed for the new-repo flow.
 ///
 /// `gh auth status` is the one auth probe that is documented and stable — it

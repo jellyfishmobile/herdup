@@ -346,6 +346,10 @@ fn show_preflight(args: &[String]) -> Result<(), AppError> {
         HerdrStatus::Missing => println!("herdr   : NOT FOUND"),
     }
 
+    if let Some(note) = launcher_core::preflight::platform_note() {
+        println!("note    : {note}");
+    }
+
     let gh = check_gh();
     match gh.blocker() {
         None => println!(

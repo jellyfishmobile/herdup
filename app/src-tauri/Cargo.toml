@@ -8,7 +8,10 @@ description = "herdup desktop launcher"
 
 [lib]
 name = "herdup_app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop only. The Tauri template also lists `staticlib` and `cdylib` for
+# mobile targets; on Windows the cdylib produced a herdup_app_lib.dll that was
+# bundled into the installer and never loaded.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

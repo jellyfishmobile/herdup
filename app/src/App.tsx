@@ -569,6 +569,11 @@ function PreflightStep(props: {
           <span className={r.herdr_ok ? "ok" : "warn"}>{r.herdr_ok ? "ok" : "problem"}</span>
         </li>
         {r.herdr_note && <li className="muted">{r.herdr_note}</li>}
+        {r.platform_note && (
+          <li className="muted" data-testid="platform-note">
+            {r.platform_note}
+          </li>
+        )}
         <li>
           <strong>GitHub CLI</strong>
           <span className={r.gh_ready ? "ok" : "muted"}>

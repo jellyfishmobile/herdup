@@ -80,6 +80,8 @@ export type PreflightReport = {
   blocking: string[];
   /// Not blockers — things to acknowledge before agents start editing.
   warnings: string[];
+  /// A standing platform caveat, not a per-launch problem.
+  platform_note: string | null;
   project: string;
   git_branch: string | null;
   can_launch: boolean;

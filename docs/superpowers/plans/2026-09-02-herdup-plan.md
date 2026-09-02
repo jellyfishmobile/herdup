@@ -403,7 +403,19 @@ rule the tests follow.
 **Tests** — argv construction for public/private/owner combinations; absent-`gh`
 degradation touches nothing else.
 
-**Exit** — new repo → clone → team launched, in one pass.
+**Exit — BUILT, LIVE PATH UNVERIFIED 2026-09-02.**
+
+- [x] `gh` detection, owner list, repo creation and clone, wired into both the
+      CLI (`new-repo`) and the GUI (a collapsed panel on the project step).
+- [x] 15 tests covering argv construction and validation as pure functions —
+      no network, no account. Private is the default; `--public` must be asked
+      for; an existing destination is refused rather than overwritten.
+- [x] Absent or logged-out `gh` disables only this flow, with the reason shown.
+- [ ] **A repository has never actually been created.** Verification was going
+      to create a throwaway repo and delete it, but the `gh` token lacks the
+      `delete_repo` scope — so the test would have left the repo behind. Stopped
+      rather than create something that could not be cleaned up. Needs either
+      `gh auth refresh -h github.com -s delete_repo` or a manual run.
 
 ---
 
@@ -413,7 +425,26 @@ degradation touches nothing else.
 herdr's Windows preview-beta warning (spec §13); README with install and a
 30-second quick start.
 
-**Exit** — a clean machine can install and launch a team.
+**Exit — BUILT, CLEAN-MACHINE INSTALL UNVERIFIED 2026-09-02.**
+
+- [x] `herdup_0.1.0_x64_en-US.msi`, 3.33 MB. Validated by administrative
+      extract (`msiexec /a`) rather than by installing: the payload is exactly
+      `herdup-app.exe`, reporting `ProductName: herdup, FileVersion: 0.1.0`.
+- [x] herdr's Windows preview-beta status is surfaced in the environment check,
+      in both the GUI and the CLI (spec §13).
+- [x] README with install steps, a 30-second start, an explicit "what it will
+      not do", and an honest status table.
+- [ ] **Never installed on a clean machine**, which is what the criterion
+      actually asks. Doing it here would only prove it installs on the machine
+      that built it.
+- [ ] `.dmg` unbuilt — the bundler correctly skips it on Windows.
+- [ ] The MSI is **unsigned**, so SmartScreen warns. Signing needs a
+      certificate and is a distribution decision, not a build one.
+
+**Found while packaging:** the first bundle shipped a `herdup_app_lib.dll` that
+nothing loads — the Tauri template declares `cdylib`/`staticlib` crate types for
+mobile. Removing them was not enough on its own: the bundler sweeps DLLs out of
+`target/release`, so the stale artifact kept being packaged until it was deleted.
 
 ---
 

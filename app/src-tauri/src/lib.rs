@@ -116,6 +116,8 @@ pub struct PreflightDto {
     /// Not blockers, but things a human must acknowledge before agents start
     /// editing — an unversioned folder, or uncommitted work already in the tree.
     warnings: Vec<String>,
+    /// A standing platform caveat, not a per-launch problem.
+    platform_note: Option<String>,
     project: String,
     git_branch: Option<String>,
     can_launch: bool,
@@ -392,6 +394,7 @@ fn run_preflight_blocking(options: LaunchOptions) -> Result<PreflightDto, String
         needs_first_run: pf.needs_first_run().iter().map(|c| c.id.clone()).collect(),
         blocking: pf.blocking_issues().iter().map(|i| i.explain()).collect(),
         warnings: pf.warnings().iter().map(|w| w.explain()).collect(),
+        platform_note: preflight::platform_note().map(str::to_string),
         project: pf.project.display().to_string(),
         git_branch: pf.git.branch.clone(),
         can_launch: pf.can_launch(),
