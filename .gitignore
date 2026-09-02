@@ -1,0 +1,14 @@
+# scratch: local Claude computer-use agent, not part of the launcher
+computer-use/
+
+# rust / tauri
+target/
+**/target/
+
+# node
+node_modules/
+dist/
+
+# os
+.DS_Store
+Thumbs.db
