@@ -1,0 +1,664 @@
+//! herdup desktop app: the Tauri command layer.
+//!
+//! Deliberately thin. Every decision — planning, gating, remediation — lives in
+//! `launcher-core` and is already tested without a GUI (Phases 1–6). This module
+//! only converts those types into something serialisable and streams progress
+//! events. **No business logic belongs here**, because nothing here is covered
+//! by the test suite that matters.
+
+use launcher_core::execute::{Event, Executor, LaunchedPane, Outcome, PaneState};
+use launcher_core::firstrun::{FirstRun, FirstRunSession, FirstRunState, FirstRunTarget};
+use launcher_core::herdr::HerdrCli;
+use launcher_core::plan::{LaunchPlan, LaunchRequest};
+use launcher_core::preflight::{self, Preflight, SystemResolver};
+use launcher_core::registry::Registry;
+use launcher_core::settings::Settings;
+use launcher_core::template::Templates;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::Duration;
+use tauri::{Emitter, Manager, State};
+
+const SESSION: &str = "herdup";
+
+// ---------------------------------------------------------------------------
+// DTOs
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct TemplateDto {
+    id: String,
+    display_name: String,
+    description: String,
+    panes: Vec<TemplatePaneDto>,
+}
+
+#[derive(Serialize)]
+pub struct TemplatePaneDto {
+    role: String,
+    cli: String,
+    flags: String,
+    coordinator: bool,
+}
+
+#[derive(Serialize)]
+pub struct CliDto {
+    id: String,
+    display_name: String,
+    binary: String,
+    /// `null` when herdr cannot manage this CLI as an agent.
+    kind: Option<String>,
+    flag_presets: Vec<String>,
+    /// Whether herdup may brief it without a human looking first.
+    auto_briefable: bool,
+    install_command: Option<String>,
+    docs_url: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct WorkspaceDto {
+    workspace_id: String,
+    label: String,
+    pane_count: u32,
+    agent_status: String,
+}
+
+#[derive(Serialize)]
+pub struct PlannedPaneDto {
+    index: usize,
+    role: String,
+    cli: String,
+    cli_display: String,
+    command: String,
+    agent_name: Option<String>,
+    coordinator: bool,
+    /// False means a human must release the briefing.
+    auto_brief: bool,
+    dropped_flags: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct PlanDto {
+    workspace_label: String,
+    panes: Vec<PlannedPaneDto>,
+    steps: Vec<String>,
+    distinct_clis: Vec<String>,
+    manual_briefings: usize,
+}
+
+#[derive(Serialize)]
+pub struct CliStatusDto {
+    id: String,
+    display_name: String,
+    binary: String,
+    resolved: Option<String>,
+    installed: bool,
+    first_run_done: bool,
+    install_command: Option<String>,
+    docs_url: Option<String>,
+    alternatives: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct PreflightDto {
+    herdr: String,
+    herdr_ok: bool,
+    /// Present when a herdr server on another protocol is running: herdup will
+    /// not restart it, because that would exit the user's panes.
+    herdr_note: Option<String>,
+    gh_ready: bool,
+    gh_account: Option<String>,
+    gh_blocker: Option<String>,
+    clis: Vec<CliStatusDto>,
+    needs_first_run: Vec<String>,
+    blocking: Vec<String>,
+    can_launch: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct LaunchedPaneDto {
+    index: usize,
+    role: String,
+    cli_display: String,
+    pane_id: Option<String>,
+    agent_name: Option<String>,
+    /// `briefed` | `needs_attention` | `ready` | `starting` | `not_created`
+    state: String,
+    reason: Option<String>,
+    screen: Option<String>,
+    has_pending_briefing: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct OutcomeDto {
+    workspace_id: Option<String>,
+    panes: Vec<LaunchedPaneDto>,
+    briefed: usize,
+    failure: Option<String>,
+    failed_step: Option<String>,
+    session: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct FirstRunPaneDto {
+    cli: String,
+    display_name: String,
+    pane_id: String,
+    /// `waiting` | `needs_you` | `verified`
+    state: String,
+    screen: String,
+    hints: Vec<HintDto>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct HintDto {
+    kind: String,
+    value: String,
+}
+
+#[derive(Deserialize, Default)]
+pub struct LaunchOptions {
+    project: String,
+    template: String,
+    #[serde(default)]
+    skip: Vec<usize>,
+    /// `[[index, cli_id], …]`
+    #[serde(default)]
+    overrides: Vec<(usize, String)>,
+}
+
+// ---------------------------------------------------------------------------
+// state
+// ---------------------------------------------------------------------------
+
+#[derive(Default)]
+pub struct AppState {
+    /// The most recent launch, so a held briefing can be released later.
+    outcome: Mutex<Option<Outcome>>,
+    first_run: Mutex<Option<FirstRunSession>>,
+}
+
+fn client() -> Result<HerdrCli, String> {
+    HerdrCli::discover()
+        .map(|c| c.with_session(SESSION))
+        .map_err(|e| e.to_string())
+}
+
+fn load() -> Result<(Registry, Templates, Settings), String> {
+    let registry = launcher_core::config::load_registry().map_err(|e| e.to_string())?;
+    let templates = launcher_core::config::load_templates(&registry).map_err(|e| e.to_string())?;
+    Ok((registry, templates, Settings::load()))
+}
+
+fn build_plan(options: &LaunchOptions) -> Result<(LaunchPlan, Registry, Settings), String> {
+    let (registry, templates, settings) = load()?;
+    let template = templates
+        .get(&options.template)
+        .ok_or_else(|| format!("no template '{}'", options.template))?;
+
+    let project = PathBuf::from(&options.project);
+    let mut request = LaunchRequest::new(&project, template);
+    for index in &options.skip {
+        request = request.skip_pane(*index);
+    }
+    for (index, cli) in &options.overrides {
+        request = request.override_cli(*index, cli);
+    }
+    let plan = launcher_core::plan::plan(&request, &registry).map_err(|e| e.to_string())?;
+    Ok((plan, registry, settings))
+}
+
+// ---------------------------------------------------------------------------
+// commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn list_templates() -> Result<Vec<TemplateDto>, String> {
+    let (_, templates, _) = load()?;
+    Ok(templates
+        .iter()
+        .map(|t| TemplateDto {
+            id: t.id.clone(),
+            display_name: t.display_name.clone(),
+            description: t.description.clone(),
+            panes: t
+                .panes
+                .iter()
+                .map(|p| TemplatePaneDto {
+                    role: p.role.clone(),
+                    cli: p.cli.clone(),
+                    flags: p.flags.clone(),
+                    coordinator: p.coordinator,
+                })
+                .collect(),
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn list_clis() -> Result<Vec<CliDto>, String> {
+    let (registry, _, _) = load()?;
+    Ok(registry
+        .iter()
+        .map(|e| CliDto {
+            id: e.id.clone(),
+            display_name: e.display_name.clone(),
+            binary: e.binary.clone(),
+            kind: e.kind.clone(),
+            flag_presets: e.flag_presets.clone(),
+            auto_briefable: e.briefing_trust.may_auto_brief() && e.has_agent_kind(),
+            install_command: e.install_command().map(str::to_string),
+            docs_url: e.docs_url.clone(),
+        })
+        .collect())
+}
+
+/// Live workspaces on herdup's own session.
+///
+/// Never the user's default session: a protocol mismatch there is reported, not
+/// resolved, because resolving it means stopping their server and exiting their
+/// panes.
+#[tauri::command]
+fn list_workspaces() -> Result<Vec<WorkspaceDto>, String> {
+    let cli = client()?;
+    match cli.workspace_list() {
+        Ok(list) => Ok(list
+            .into_iter()
+            .map(|w| WorkspaceDto {
+                label: w.label.clone().unwrap_or_else(|| w.workspace_id.clone()),
+                workspace_id: w.workspace_id,
+                pane_count: w.pane_count,
+                agent_status: w.agent_status.as_str().to_string(),
+            })
+            .collect()),
+        // No server yet is the normal first-run state, not an error to show.
+        Err(e) if e.is_recoverable_by_starting_server() => Ok(Vec::new()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn preview_plan(options: LaunchOptions) -> Result<PlanDto, String> {
+    let (plan, _, _) = build_plan(&options)?;
+    Ok(plan_dto(&plan))
+}
+
+fn plan_dto(plan: &LaunchPlan) -> PlanDto {
+    PlanDto {
+        workspace_label: plan.workspace_label.clone(),
+        panes: plan
+            .panes
+            .iter()
+            .map(|p| PlannedPaneDto {
+                index: p.pane.0,
+                role: p.role.clone(),
+                cli: p.cli.clone(),
+                cli_display: p.cli_display.clone(),
+                command: p.command.clone(),
+                agent_name: p.agent_name.clone(),
+                coordinator: p.coordinator,
+                auto_brief: p.gate.is_auto(),
+                dropped_flags: p.dropped_flags.clone(),
+            })
+            .collect(),
+        steps: plan.describe().lines().map(str::to_string).collect(),
+        distinct_clis: plan.distinct_clis().iter().map(|s| s.to_string()).collect(),
+        manual_briefings: plan.requires_human_briefing().len(),
+    }
+}
+
+#[tauri::command]
+fn run_preflight(options: LaunchOptions) -> Result<PreflightDto, String> {
+    let (plan, registry, settings) = build_plan(&options)?;
+    let cli = client()?;
+    let pf = Preflight::run(&cli, &plan, &registry, &settings, &SystemResolver);
+    let gh = preflight::check_gh();
+
+    use launcher_core::preflight::HerdrStatus;
+    let (herdr, herdr_ok, herdr_note) = match &pf.herdr {
+        HerdrStatus::Ready { version } => (format!("herdr {version}"), true, None),
+        HerdrStatus::ServerDown { version } => (
+            format!("herdr {version}"),
+            true,
+            Some("No server for herdup's session yet — one starts at launch.".into()),
+        ),
+        HerdrStatus::TooOld { found, required } => (
+            format!("herdr {found}"),
+            false,
+            Some(format!("Too old: herdup needs {required} or newer.")),
+        ),
+        HerdrStatus::ProtocolMismatch { version, .. } => (
+            format!("herdr {version}"),
+            false,
+            Some(
+                "A herdr server on a different protocol is running. Restarting it would \
+                 exit its panes, so herdup will not do it for you."
+                    .into(),
+            ),
+        ),
+        HerdrStatus::Missing => ("herdr not found".into(), false, None),
+    };
+
+    Ok(PreflightDto {
+        herdr,
+        herdr_ok,
+        herdr_note,
+        gh_ready: gh.usable(),
+        gh_account: gh.account.clone(),
+        gh_blocker: gh.blocker().map(str::to_string),
+        clis: pf
+            .clis
+            .iter()
+            .map(|c| CliStatusDto {
+                id: c.id.clone(),
+                display_name: c.display_name.clone(),
+                binary: c.binary.clone(),
+                resolved: c.resolved.as_ref().map(|p| p.display().to_string()),
+                installed: c.installed(),
+                first_run_done: c.first_run_done,
+                install_command: c.install_command.clone(),
+                docs_url: c.docs_url.clone(),
+                alternatives: pf
+                    .alternatives_for(&c.id)
+                    .iter()
+                    .map(|a| a.id.clone())
+                    .collect(),
+            })
+            .collect(),
+        needs_first_run: pf.needs_first_run().iter().map(|c| c.id.clone()).collect(),
+        blocking: pf.blocking_issues().iter().map(describe_issue).collect(),
+        can_launch: pf.can_launch(),
+    })
+}
+
+fn describe_issue(issue: &launcher_core::preflight::Issue) -> String {
+    use launcher_core::preflight::Issue;
+    match issue {
+        Issue::HerdrMissing => "herdr is not installed".into(),
+        Issue::HerdrTooOld { found, required } => {
+            format!("herdr {found} is older than the required {required}")
+        }
+        Issue::HerdrProtocolMismatch { .. } => {
+            "a herdr server on a different protocol is running".into()
+        }
+        Issue::ServerDown => "no herdr server yet".into(),
+        Issue::CliMissing { display_name, .. } => format!("{display_name} is not installed"),
+    }
+}
+
+// ---- first run -------------------------------------------------------------
+
+#[tauri::command]
+fn start_first_run(
+    options: LaunchOptions,
+    state: State<'_, AppState>,
+) -> Result<Vec<FirstRunPaneDto>, String> {
+    let (plan, registry, settings) = build_plan(&options)?;
+    let cli = client()?;
+    preflight::ensure_server(&cli, Duration::from_secs(20)).map_err(|e| e.to_string())?;
+
+    let pf = Preflight::run(&cli, &plan, &registry, &settings, &SystemResolver);
+    let targets: Vec<FirstRunTarget> = pf
+        .needs_first_run()
+        .iter()
+        .map(|c| FirstRunTarget {
+            cli: c.id.clone(),
+            display_name: c.display_name.clone(),
+            binary: c.binary.clone(),
+        })
+        .collect();
+    if targets.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let session = FirstRun::new(&cli)
+        .start(&plan.project, &targets, &mut |_| {})
+        .map_err(|e| e.to_string())?;
+    let dto = first_run_dto(&session);
+    *state.first_run.lock().unwrap() = Some(session);
+    Ok(dto)
+}
+
+/// One polling round. The UI owns the interval, which keeps the backend free of
+/// timers and matches how `FirstRun` is tested.
+#[tauri::command]
+fn poll_first_run(state: State<'_, AppState>) -> Result<Vec<FirstRunPaneDto>, String> {
+    let cli = client()?;
+    let mut guard = state.first_run.lock().unwrap();
+    let Some(session) = guard.as_mut() else {
+        return Ok(Vec::new());
+    };
+    FirstRun::new(&cli).poll_once(session, &mut |_| {});
+    Ok(first_run_dto(session))
+}
+
+/// Finish the pass: record what actually verified, then tear the panes down.
+///
+/// Only CLIs that reached their prompt are cached, so abandoning caches nothing.
+#[tauri::command]
+fn finish_first_run(state: State<'_, AppState>) -> Result<(), String> {
+    let cli = client()?;
+    let Some(session) = state.first_run.lock().unwrap().take() else {
+        return Ok(());
+    };
+    let mut settings = Settings::load();
+    session.apply_to(&mut settings);
+    let _ = settings.save();
+    let _ = FirstRun::new(&cli).teardown(&session);
+    Ok(())
+}
+
+fn first_run_dto(session: &FirstRunSession) -> Vec<FirstRunPaneDto> {
+    session
+        .panes
+        .iter()
+        .map(|p| FirstRunPaneDto {
+            cli: p.cli.clone(),
+            display_name: p.display_name.clone(),
+            pane_id: p.pane_id.clone(),
+            state: match p.state {
+                FirstRunState::Waiting => "waiting",
+                FirstRunState::NeedsYou => "needs_you",
+                FirstRunState::Verified => "verified",
+            }
+            .into(),
+            screen: p.screen.clone(),
+            hints: p
+                .hints
+                .iter()
+                .map(|h| HintDto {
+                    kind: format!("{:?}", h.kind).to_lowercase(),
+                    value: h.value.clone(),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+// ---- launching -------------------------------------------------------------
+
+/// Run the launch on a worker thread, streaming progress as `launch-progress`
+/// events and resolving with the finished outcome.
+#[tauri::command]
+async fn launch(app: tauri::AppHandle, options: LaunchOptions) -> Result<OutcomeDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let (plan, _, _) = build_plan(&options)?;
+        let cli = client()?;
+        preflight::ensure_server(&cli, Duration::from_secs(20)).map_err(|e| e.to_string())?;
+
+        let outcome = Executor::new(&cli).execute(&plan, &mut |event| {
+            let _ = app.emit("launch-progress", progress_dto(&event));
+        });
+
+        let dto = outcome_dto(&outcome);
+        if let Some(state) = app.try_state::<AppState>() {
+            *state.outcome.lock().unwrap() = Some(outcome);
+        }
+        Ok(dto)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize, Clone)]
+struct ProgressDto {
+    kind: String,
+    index: Option<usize>,
+    total: Option<usize>,
+    role: Option<String>,
+    detail: Option<String>,
+}
+
+fn progress_dto(event: &Event) -> ProgressDto {
+    let base = |kind: &str| ProgressDto {
+        kind: kind.into(),
+        index: None,
+        total: None,
+        role: None,
+        detail: None,
+    };
+    match event {
+        Event::StepStarted {
+            index,
+            total,
+            description,
+        } => ProgressDto {
+            index: Some(*index),
+            total: Some(*total),
+            detail: Some(description.clone()),
+            ..base("step")
+        },
+        Event::PaneCreated { role, pane_id, .. } => ProgressDto {
+            role: Some(role.clone()),
+            detail: Some(pane_id.clone()),
+            ..base("pane_created")
+        },
+        Event::PaneReady { role, .. } => ProgressDto {
+            role: Some(role.clone()),
+            ..base("pane_ready")
+        },
+        Event::PaneNeedsAttention { role, reason, .. } => ProgressDto {
+            role: Some(role.clone()),
+            detail: Some(reason.explain().into()),
+            ..base("needs_attention")
+        },
+        Event::Briefed { role, .. } => ProgressDto {
+            role: Some(role.clone()),
+            ..base("briefed")
+        },
+        Event::BriefingWithheld { role, reason, .. } => ProgressDto {
+            role: Some(role.clone()),
+            detail: Some(reason.explain().into()),
+            ..base("briefing_withheld")
+        },
+        Event::Failed { message, .. } => ProgressDto {
+            detail: Some(message.clone()),
+            ..base("failed")
+        },
+        Event::Finished => base("finished"),
+    }
+}
+
+fn pane_dto(index: usize, pane: &LaunchedPane) -> LaunchedPaneDto {
+    let (state, reason) = match &pane.state {
+        PaneState::Briefed => ("briefed", None),
+        PaneState::Ready => ("ready", None),
+        PaneState::Starting => ("starting", None),
+        PaneState::NotCreated => ("not_created", None),
+        PaneState::NeedsAttention(r) => ("needs_attention", Some(r.explain().to_string())),
+    };
+    LaunchedPaneDto {
+        index,
+        role: pane.role.clone(),
+        cli_display: pane.cli_display.clone(),
+        pane_id: pane.pane_id.clone(),
+        agent_name: pane.agent_name.clone(),
+        state: state.into(),
+        reason,
+        screen: pane.screen.clone(),
+        has_pending_briefing: pane.pending_briefing.is_some(),
+    }
+}
+
+fn outcome_dto(outcome: &Outcome) -> OutcomeDto {
+    OutcomeDto {
+        workspace_id: outcome.workspace_id.clone(),
+        panes: outcome
+            .panes
+            .iter()
+            .enumerate()
+            .map(|(i, p)| pane_dto(i, p))
+            .collect(),
+        briefed: outcome.briefed(),
+        failure: outcome.failure.as_ref().map(|f| f.message.clone()),
+        failed_step: outcome.failure.as_ref().map(|f| f.description.clone()),
+        session: SESSION.into(),
+    }
+}
+
+/// Release a briefing a human has now cleared.
+///
+/// Goes through the agent surface, so if the dialog is still up herdr refuses
+/// again rather than typing the briefing into it.
+#[tauri::command]
+fn send_briefing_now(index: usize, state: State<'_, AppState>) -> Result<OutcomeDto, String> {
+    let cli = client()?;
+    let mut guard = state.outcome.lock().unwrap();
+    let outcome = guard.as_mut().ok_or("no launch in progress")?;
+    let pane = outcome
+        .panes
+        .get_mut(index)
+        .ok_or_else(|| format!("no pane {index}"))?;
+    Executor::new(&cli)
+        .send_pending_briefing(pane)
+        .map_err(|e| e.to_string())?;
+    Ok(outcome_dto(outcome))
+}
+
+#[tauri::command]
+fn open_terminal(project: String) -> Result<String, String> {
+    let settings = Settings::load();
+    let path = PathBuf::from(project);
+    match launcher_core::terminal::open_with_fallback(
+        &path,
+        Some(SESSION),
+        settings.terminal.as_deref(),
+    ) {
+        Ok(h) => Ok(h.display()),
+        Err(h) => Err(format!(
+            "could not open a terminal. Run this yourself: {}",
+            h.display()
+        )),
+    }
+}
+
+#[tauri::command]
+fn default_projects_root() -> Option<String> {
+    Settings::load()
+        .projects_root_path()
+        .map(|p| p.display().to_string())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(AppState::default())
+        .invoke_handler(tauri::generate_handler![
+            list_templates,
+            list_clis,
+            list_workspaces,
+            preview_plan,
+            run_preflight,
+            start_first_run,
+            poll_first_run,
+            finish_first_run,
+            launch,
+            send_briefing_now,
+            open_terminal,
+            default_projects_root,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running herdup");
+}

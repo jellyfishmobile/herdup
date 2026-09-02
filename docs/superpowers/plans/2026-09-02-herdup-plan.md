@@ -349,7 +349,29 @@ makes a finished launch look like a hang. Test with the built binary.
 **Tests** — Tauri commands unit-tested on the Rust side. UI verified manually
 against the checklist below.
 
-**Exit** — every Phase 6 flow is reachable through the GUI, plus the manual checks.
+**Exit — BUILT, PARTIALLY VERIFIED 2026-09-02.**
+
+- [x] Tauri v2 + React + TypeScript scaffolded by hand (not the interactive
+      generator), building as a workspace member. `tsc --noEmit` and `vite build`
+      clean; the Rust crate compiles and clippy `-D warnings` passes.
+- [x] Twelve commands wrapping Phases 2–6. **No business logic in the app crate**
+      — it maps `launcher-core` types to DTOs and streams progress events.
+- [x] Capabilities scoped to what the window actually uses: core defaults, event
+      listen/unlisten, and the folder picker. No filesystem, shell or HTTP
+      permission is granted to the webview.
+- [x] All six screens implemented, including per-pane *Send briefing now*,
+      *switch CLI* / *drop pane* remediation, and first-run hint copying.
+- [x] **Verified visually:** the window renders and IPC works — the first screen
+      showed live `list_workspaces` output.
+- [ ] **NOT verified: the full flow through the GUI.** Team → preflight →
+      first-run → launch → done has not been driven end to end in the window.
+      A coordinate-based automation attempt was unreliable (the window moved
+      between screenshots) and was abandoned. This stays a manual check.
+- [ ] macOS: unbuilt and unrun.
+
+**Notable:** the app deliberately uses herdup's own named herdr session, so it
+can never disturb workspaces the user started themselves — the same isolation
+rule the tests follow.
 
 ---
 
