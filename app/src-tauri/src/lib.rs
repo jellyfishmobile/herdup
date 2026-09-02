@@ -62,6 +62,12 @@ pub struct WorkspaceDto {
     label: String,
     pane_count: u32,
     agent_status: String,
+    /// The folder its panes are in, so the workspace is identifiable and can be
+    /// reused as a project. Taken from the panes themselves rather than the
+    /// label, which is only a display name.
+    path: Option<String>,
+    /// At least one pane is waiting on a human.
+    blocked: bool,
 }
 
 #[derive(Serialize)]
@@ -276,15 +282,29 @@ async fn list_workspaces() -> Result<Vec<WorkspaceDto>, String> {
 fn list_workspaces_blocking() -> Result<Vec<WorkspaceDto>, String> {
     let cli = client()?;
     match cli.workspace_list() {
-        Ok(list) => Ok(list
-            .into_iter()
-            .map(|w| WorkspaceDto {
-                label: w.label.clone().unwrap_or_else(|| w.workspace_id.clone()),
-                workspace_id: w.workspace_id,
-                pane_count: w.pane_count,
-                agent_status: w.agent_status.as_str().to_string(),
-            })
-            .collect()),
+        Ok(list) => {
+            // One pane listing for all workspaces, rather than one call each.
+            let panes = cli.pane_list().unwrap_or_default();
+            Ok(list
+                .into_iter()
+                .map(|w| {
+                    let mine: Vec<_> = panes
+                        .iter()
+                        .filter(|p| p.workspace_id == w.workspace_id)
+                        .collect();
+                    WorkspaceDto {
+                        label: w.label.clone().unwrap_or_else(|| w.workspace_id.clone()),
+                        pane_count: w.pane_count,
+                        agent_status: w.agent_status.as_str().to_string(),
+                        path: mine.first().map(|p| p.cwd_path().display().to_string()),
+                        blocked: mine
+                            .iter()
+                            .any(|p| p.agent_status == launcher_core::herdr::AgentStatus::Blocked),
+                        workspace_id: w.workspace_id,
+                    }
+                })
+                .collect())
+        }
         // No server yet is the normal first-run state, not an error to show.
         Err(e) if e.is_recoverable_by_starting_server() => Ok(Vec::new()),
         Err(e) => Err(e.to_string()),
@@ -724,6 +744,33 @@ async fn create_repo(
     .map_err(|e| e.to_string())?
 }
 
+/// Attach to a workspace that is already running.
+///
+/// Focuses it first so the terminal opens on that workspace rather than
+/// whichever one herdr happened to have focused.
+#[tauri::command]
+async fn attach_workspace(workspace_id: String, path: Option<String>) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let cli = client()?;
+        cli.workspace_focus(&workspace_id)
+            .map_err(|e| e.to_string())?;
+        let settings = Settings::load();
+        let dir = path
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        match launcher_core::terminal::open_with_fallback(
+            &dir,
+            Some(SESSION),
+            settings.terminal.as_deref(),
+        ) {
+            Ok(h) => Ok(h.display()),
+            Err(h) => Err(format!("could not open a terminal. Run: {}", h.display())),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn open_terminal(project: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || open_terminal_blocking(project))
@@ -772,6 +819,7 @@ pub fn run() {
             send_briefing_now,
             gh_owners,
             create_repo,
+            attach_workspace,
             open_terminal,
             default_projects_root,
         ])

@@ -145,6 +145,14 @@ impl HerdrCli {
         self.run_json("workspace create", &a)
     }
 
+    /// Make a workspace the focused one, so an attaching terminal opens on it.
+    pub fn workspace_focus(&self, workspace_id: &str) -> Result<()> {
+        self.run_unit(
+            "workspace focus",
+            &args(["workspace", "focus", workspace_id]),
+        )
+    }
+
     pub fn workspace_close(&self, workspace_id: &str) -> Result<()> {
         self.run_unit(
             "workspace close",

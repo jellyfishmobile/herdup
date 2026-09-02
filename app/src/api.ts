@@ -34,6 +34,8 @@ export type Workspace = {
   label: string;
   pane_count: number;
   agent_status: string;
+  path: string | null;
+  blocked: boolean;
 };
 
 export type PlannedPane = {
@@ -158,6 +160,8 @@ export const api = {
   launch: (options: LaunchOptions) => invoke<Outcome>("launch", { options }),
   sendBriefingNow: (index: number) => invoke<Outcome>("send_briefing_now", { index }),
   openTerminal: (project: string) => invoke<string>("open_terminal", { project }),
+  attachWorkspace: (workspaceId: string, path: string | null) =>
+    invoke<string>("attach_workspace", { workspaceId, path }),
   defaultProjectsRoot: () => invoke<string | null>("default_projects_root"),
   onProgress: (fn: (p: Progress) => void) => listen<Progress>("launch-progress", (e) => fn(e.payload)),
 };

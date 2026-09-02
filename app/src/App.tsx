@@ -143,6 +143,11 @@ export default function App() {
             setProject={setProject}
             pickFolder={pickFolder}
             workspaces={workspaces}
+            onAttach={(w) =>
+              guard(async () => {
+                await api.attachWorkspace(w.workspace_id, w.path);
+              })
+            }
             onNext={() => setStep("team")}
             busy={busy}
           />
@@ -218,6 +223,7 @@ function ProjectStep(props: {
   setProject: (p: string) => void;
   pickFolder: () => void;
   workspaces: Workspace[];
+  onAttach: (w: Workspace) => void;
   onNext: () => void;
   busy: boolean;
 }) {
@@ -248,11 +254,32 @@ function ProjectStep(props: {
       ) : (
         <ul className="list">
           {props.workspaces.map((w) => (
-            <li key={w.workspace_id}>
+            <li key={w.workspace_id} data-testid={`workspace-${w.workspace_id}`}>
               <strong>{w.label}</strong>
               <span className="muted">
-                {w.pane_count} pane(s) · {w.agent_status}
+                {w.pane_count} pane(s)
+                {w.path ? ` · ${w.path}` : ""}
               </span>
+              {w.blocked ? (
+                <span className="warn">a pane is waiting on you</span>
+              ) : (
+                <span className="muted">{w.agent_status}</span>
+              )}
+              {/* It is already running, so "attach" is the whole action. */}
+              <button
+                data-testid={`attach-${w.workspace_id}`}
+                onClick={() => props.onAttach(w)}
+              >
+                Attach
+              </button>
+              {w.path && (
+                <button
+                  data-testid={`use-folder-${w.workspace_id}`}
+                  onClick={() => props.setProject(w.path!)}
+                >
+                  Use this folder
+                </button>
+              )}
             </li>
           ))}
         </ul>
