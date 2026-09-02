@@ -43,6 +43,16 @@ pub enum HerdrError {
         stderr: String,
     },
 
+    /// herdr exit status 2: a CLI *syntax* error — an unknown command or bad
+    /// arguments. This is always a herdup bug, never a runtime condition, so it
+    /// must surface loudly instead of being folded into an ordinary failure.
+    ///
+    /// It hid a real one: `wait agent-status` does not exist on herdr 0.8.2, and
+    /// treating its exit 2 as "the wait timed out" made a broken call look like
+    /// a working one for three phases.
+    #[error("`herdr {args}` is not valid for this herdr version (exit 2): {stderr}")]
+    CliSyntax { args: String, stderr: String },
+
     #[error("could not parse herdr output for `{context}`: {source}")]
     Parse {
         context: String,

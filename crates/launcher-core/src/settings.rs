@@ -60,6 +60,17 @@ impl Settings {
         Settings::load_from(crate::config::config_dir().as_deref())
     }
 
+    /// Persist to the platform config directory.
+    ///
+    /// A missing config directory is not an error: herdup still works, it just
+    /// re-runs first-run next time.
+    pub fn save(&self) -> std::io::Result<()> {
+        match crate::config::config_dir() {
+            Some(dir) => self.save_to(&dir),
+            None => Ok(()),
+        }
+    }
+
     /// Persist to `<dir>/settings.toml`, creating the directory if needed.
     pub fn save_to(&self, dir: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(dir)?;

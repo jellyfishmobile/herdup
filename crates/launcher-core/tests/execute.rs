@@ -209,6 +209,35 @@ fn a_pane_sitting_on_a_prompt_is_flagged_and_its_briefing_withheld() {
 }
 
 #[test]
+fn a_pane_whose_detection_lags_is_still_classified_as_blocked() {
+    // Observed live against herdr 0.8.2: a pane sitting on a trust prompt
+    // reported `unknown` at the instant its wait expired and `blocked` a moment
+    // later. Reading once would report "did not reach its prompt in time" for a
+    // pane that is plainly waiting on the user.
+    let cli = client(
+        "lagging",
+        rules(vec![
+            json!({ "match": ["wait", "agent-status"], "responses": [{ "exit": 1 }] }),
+            json!({
+                "match": ["pane", "get"],
+                "responses": [
+                    ok(json!({ "pane": pane("w1:p1", "unknown") })),
+                    ok(json!({ "pane": pane("w1:p1", "blocked") }))
+                ]
+            }),
+        ]),
+    );
+    let p = make_plan("solo", None);
+    let (outcome, _) = run(&cli, &p);
+
+    assert_eq!(
+        outcome.panes[0].state,
+        PaneState::NeedsAttention(AttentionReason::Blocked),
+        "should say the pane is waiting on you, not that it timed out"
+    );
+}
+
+#[test]
 fn a_pane_that_never_settles_times_out_and_is_withheld() {
     let cli = client(
         "timeout",

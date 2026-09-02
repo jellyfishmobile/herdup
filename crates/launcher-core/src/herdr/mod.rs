@@ -313,6 +313,11 @@ impl HerdrCli {
     }
 
     /// Spawn a detached headless server for this session.
+    ///
+    /// Truly detached: the server outlives us, and — critically — we must not
+    /// outlive *it*. Null stdio alone is not enough on Windows, where a child
+    /// inheriting the console keeps the parent's pipes open, so a caller that
+    /// starts a server then exits appears to hang until the daemon stops.
     pub fn start_server(&self) -> Result<std::process::Child> {
         let mut cmd = Command::new(&self.exe);
         cmd.envs(self.env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
@@ -321,6 +326,15 @@ impl HerdrCli {
         cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const DETACHED_PROCESS: u32 = 0x0000_0008;
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+            cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
+        }
+
         cmd.spawn().map_err(|source| HerdrError::Spawn {
             exe: self.exe.display().to_string(),
             source,
@@ -449,7 +463,11 @@ impl HerdrCli {
         let raw = self.invoke(args)?;
         // A real API error (no server, bad pane) still comes back as JSON.
         self.envelope(context, &raw)?;
-        // Otherwise a non-zero exit means the wait expired, which is expected.
+        // Exit 2 is a syntax error, not an expired wait. Without this check a
+        // command that does not exist on this herdr looks exactly like a
+        // timeout, which is how a call to the non-existent `wait agent-status`
+        // survived three phases of testing.
+        self.reject_syntax_error(args, &raw)?;
         Ok(if raw.code == Some(0) {
             WaitOutcome::Reached
         } else {
@@ -457,8 +475,35 @@ impl HerdrCli {
         })
     }
 
+    /// herdr documents exit status 2 as a CLI syntax error. That is always our
+    /// bug — a command or flag this herdr does not have — so it is never folded
+    /// into a normal failure path.
+    fn reject_syntax_error(&self, args: &[String], raw: &Raw) -> Result<()> {
+        if raw.code == Some(2) {
+            return Err(HerdrError::CliSyntax {
+                args: args.join(" "),
+                stderr: if raw.stderr.trim().is_empty() {
+                    raw.stdout.trim().to_string()
+                } else {
+                    raw.stderr.trim().to_string()
+                },
+            });
+        }
+        Ok(())
+    }
+
     fn command_failed(&self, context: &str, args: &[String], raw: Raw) -> HerdrError {
         let _ = context;
+        if raw.code == Some(2) {
+            return HerdrError::CliSyntax {
+                args: args.join(" "),
+                stderr: if raw.stderr.trim().is_empty() {
+                    raw.stdout.trim().to_string()
+                } else {
+                    raw.stderr.trim().to_string()
+                },
+            };
+        }
         HerdrError::CommandFailed {
             args: args.join(" "),
             code: raw.code,

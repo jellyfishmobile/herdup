@@ -290,11 +290,7 @@ impl<'a> Executor<'a> {
 
                 // Trust the observed status over the wait's exit code: a wait can
                 // land while the pane is really sitting on a prompt.
-                let status = self
-                    .cli
-                    .pane_get(&id)
-                    .map(|p| p.agent_status)
-                    .unwrap_or(AgentStatus::Unknown);
+                let status = self.observe_status(&id);
 
                 let settled = outcome == WaitOutcome::Reached && status.is_settled();
                 if settled {
@@ -366,6 +362,34 @@ impl<'a> Executor<'a> {
             }
         }
         Ok(())
+    }
+
+    /// Read a pane's status, giving herdr's detection a moment to catch up.
+    ///
+    /// Observed live: a pane sitting on a trust prompt still reported `unknown`
+    /// at the instant its wait expired, and `blocked` a second later. Deciding
+    /// from the first read alone reports "did not reach its prompt in time" for
+    /// a pane that is plainly waiting on the user — the right *action*, but an
+    /// unhelpful explanation.
+    fn observe_status(&self, pane_id: &str) -> AgentStatus {
+        let mut last = AgentStatus::Unknown;
+        for attempt in 0..3 {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+            }
+            match self.cli.pane_get(pane_id) {
+                Ok(pane) => {
+                    last = pane.agent_status;
+                    // Anything conclusive ends the loop; only Unknown is worth
+                    // waiting on.
+                    if last != AgentStatus::Unknown {
+                        return last;
+                    }
+                }
+                Err(_) => return last,
+            }
+        }
+        last
     }
 
     fn type_briefing(&self, pane_id: &str, text: &str) -> Result<(), HerdrError> {

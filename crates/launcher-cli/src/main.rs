@@ -52,6 +52,7 @@ fn main() -> std::process::ExitCode {
         Some("config") => config(),
         Some("plan") => show_plan(&args[1..]),
         Some("preflight") => show_preflight(&args[1..]),
+        Some("launch") => launch(&args[1..]),
         Some("smoke") => smoke(&args[1..]),
         Some("help") | Some("--help") | Some("-h") | None => {
             usage();
@@ -87,6 +88,8 @@ fn usage() {
          launcher-cli config\n  \
          launcher-cli plan --template ID [--cwd PATH] [--skip N]... [--cli N=CLI]...\n  \
          launcher-cli preflight --template ID [--cwd PATH] [--session NAME]\n  \
+         launcher-cli launch --template ID [--cwd PATH] [--session NAME]\n                       \
+         [--skip N]... [--cli N=CLI] [--no-terminal] [--skip-first-run]\n  \
          launcher-cli smoke [--session NAME] [--cwd PATH]\n\n\
          `plan` is a dry run: it prints what a launch would do and changes nothing.\n\
          `smoke` creates and destroys an isolated named session. It never touches\n\
@@ -425,6 +428,260 @@ fn show_preflight(args: &[String]) -> Result<(), AppError> {
             }
         }
     }
+    Ok(())
+}
+
+/// The Phase 6 milestone: preflight, first-run, build the team, hand off.
+fn launch(args: &[String]) -> Result<(), AppError> {
+    use launcher_core::execute::{Event, Executor, PaneState};
+    use launcher_core::firstrun::{FirstRun, FirstRunState, FirstRunTarget};
+    use launcher_core::preflight::{ensure_server, Issue, Preflight, SystemResolver};
+
+    let Some(id) = flag(args, "--template") else {
+        eprintln!("launch: --template ID is required");
+        return Ok(());
+    };
+    let cwd = flag(args, "--cwd")
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let session = flag(args, "--session").unwrap_or_else(|| "herdup".to_string());
+    let want_terminal = !args.iter().any(|a| a == "--no-terminal");
+    let skip_first_run = args.iter().any(|a| a == "--skip-first-run");
+
+    let registry = launcher_core::config::load_registry()?;
+    let templates = launcher_core::config::load_templates(&registry)?;
+    let Some(template) = templates.get(&id) else {
+        eprintln!(
+            "launch: no template '{id}'. Known: {}",
+            template_ids(&templates)
+        );
+        return Ok(());
+    };
+    let mut settings = launcher_core::Settings::load();
+
+    let mut request = launcher_core::plan::LaunchRequest::new(&cwd, template);
+    for raw in flags(args, "--skip") {
+        if let Ok(i) = raw.parse::<usize>() {
+            request = request.skip_pane(i);
+        }
+    }
+    for raw in flags(args, "--cli") {
+        if let Some((i, cli)) = raw.split_once('=') {
+            if let Ok(i) = i.parse::<usize>() {
+                request = request.override_cli(i, cli);
+            }
+        }
+    }
+    let p = launcher_core::plan::plan(&request, &registry).map_err(AppError::Plan)?;
+
+    println!("herdup launch");
+    println!("  project  : {}", cwd.display());
+    println!(
+        "  template : {} ({} panes)",
+        template.display_name,
+        p.panes.len()
+    );
+    println!("  session  : {session}");
+
+    // ---- Stage 0 --------------------------------------------------------
+    let herdr = HerdrCli::discover()?.with_session(&session);
+    let pf = Preflight::run(&herdr, &p, &registry, &settings, &SystemResolver);
+    let blocking = pf.blocking_issues();
+    if !blocking.is_empty() {
+        println!("\nCannot launch — {} issue(s):", blocking.len());
+        for issue in &blocking {
+            match issue {
+                Issue::CliMissing {
+                    display_name,
+                    install_command,
+                    cli,
+                    ..
+                } => {
+                    println!("  - {display_name} is not installed");
+                    if let Some(cmd) = install_command {
+                        println!("      {cmd}");
+                    }
+                    let alts = pf.alternatives_for(cli);
+                    if !alts.is_empty() {
+                        println!("      or re-run with --cli N={}", alts[0].id);
+                    }
+                }
+                other => println!("  - {other:?}"),
+            }
+        }
+        return Err(AppError::Herdr(HerdrError::Api {
+            code: "preflight_blocked".into(),
+            message: format!("{} unresolved issue(s)", blocking.len()),
+        }));
+    }
+
+    step("ensure server");
+    if ensure_server(&herdr, Duration::from_secs(15))? {
+        println!("   started a headless server for session '{session}'");
+    } else {
+        println!("   already running");
+    }
+
+    // ---- Stage 1 --------------------------------------------------------
+    let pending: Vec<FirstRunTarget> = pf
+        .needs_first_run()
+        .iter()
+        .map(|c| FirstRunTarget {
+            cli: c.id.clone(),
+            display_name: c.display_name.clone(),
+            binary: c.binary.clone(),
+        })
+        .collect();
+
+    if !pending.is_empty() && !skip_first_run {
+        step("first run");
+        println!(
+            "   {} CLI(s) have not completed first run in this project.",
+            pending.len()
+        );
+        println!("   Opening one bare pane each so logins and 'trust this folder'");
+        println!("   prompts are cleared before the team is built.\n");
+
+        let fr = FirstRun::new(&herdr);
+        let mut fr_session = fr.start(&cwd, &pending, &mut |_| {})?;
+
+        // The user has to interact with these panes, so show them a terminal.
+        if want_terminal {
+            match launcher_core::terminal::open_with_fallback(
+                &cwd,
+                Some(&session),
+                settings.terminal.as_deref(),
+            ) {
+                Ok(h) => println!("   opened a terminal: {}", h.display()),
+                Err(h) => println!("   could not open a terminal; run: {}", h.display()),
+            }
+        }
+
+        let deadline = Instant::now() + Duration::from_secs(300);
+        while !fr_session.all_verified() && Instant::now() < deadline {
+            fr.poll_once(&mut fr_session, &mut |event| {
+                if let launcher_core::firstrun::FirstRunEvent::HintFound { cli, hint } = &event {
+                    println!("   [{cli}] {:?}: {}", hint.kind, hint.value);
+                }
+            });
+            for pane in fr_session.pending() {
+                if pane.state == FirstRunState::NeedsYou {
+                    println!("   [{}] waiting for you in pane {}", pane.cli, pane.pane_id);
+                }
+            }
+            if fr_session.all_verified() {
+                break;
+            }
+            std::thread::sleep(Duration::from_secs(2));
+        }
+
+        let done = fr_session.all_verified();
+        fr_session.apply_to(&mut settings);
+        let _ = settings.save();
+        let _ = fr.teardown(&fr_session);
+
+        if done {
+            println!("   first run complete for all CLIs");
+        } else {
+            println!(
+                "   first run did not finish; the team will still launch, but\n   \
+                 briefings may be withheld until you answer each pane."
+            );
+        }
+    }
+
+    // ---- Stage 2 --------------------------------------------------------
+    step("build team");
+    let outcome = Executor::new(&herdr).execute(&p, &mut |event| match event {
+        Event::PaneCreated { role, pane_id, .. } => println!("   + {role:<12} {pane_id}"),
+        Event::Briefed { role, .. } => println!("   briefed {role}"),
+        Event::BriefingWithheld { role, reason, .. } => {
+            println!("   held briefing for {role}: {}", reason.explain())
+        }
+        Event::Failed { message, .. } => println!("   ! {message}"),
+        _ => {}
+    });
+
+    // ---- Report ---------------------------------------------------------
+    println!("\nresult:");
+    for pane in &outcome.panes {
+        let state = match &pane.state {
+            PaneState::Briefed => "briefed".to_string(),
+            PaneState::Ready => "ready, not briefed".to_string(),
+            PaneState::Starting => "starting".to_string(),
+            PaneState::NotCreated => "not created".to_string(),
+            PaneState::NeedsAttention(r) => format!("NEEDS YOU — {}", r.explain()),
+        };
+        println!(
+            "  {:<12} {:<10} {}",
+            pane.role,
+            pane.pane_id.as_deref().unwrap_or("-"),
+            state
+        );
+    }
+
+    if let Some(failure) = &outcome.failure {
+        println!(
+            "\nStopped at step {}: {}\n  {}",
+            failure.step_index + 1,
+            failure.description,
+            failure.message
+        );
+        println!("  Earlier panes were left running on purpose — they may hold real work.");
+    }
+
+    let attention = outcome.needing_attention();
+    if !attention.is_empty() {
+        println!(
+            "\n{} pane(s) need you before they are briefed:",
+            attention.len()
+        );
+        for pane in &attention {
+            println!(
+                "  {} ({})",
+                pane.role,
+                pane.pane_id.as_deref().unwrap_or("-")
+            );
+            if let Some(screen) = &pane.screen {
+                for line in screen
+                    .lines()
+                    .rev()
+                    .take(3)
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .rev()
+                {
+                    if !line.trim().is_empty() {
+                        println!("      | {}", line.trim_end());
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- Stage 3 --------------------------------------------------------
+    if want_terminal {
+        step("hand off");
+        match launcher_core::terminal::open_with_fallback(
+            &cwd,
+            Some(&session),
+            settings.terminal.as_deref(),
+        ) {
+            Ok(h) => println!("   {}", h.display()),
+            Err(h) => println!(
+                "   could not open a terminal. Run this yourself:\n   {}",
+                h.display()
+            ),
+        }
+    } else {
+        println!("\nAttach with:\n  herdr --session {session}");
+    }
+
+    println!(
+        "\n{} of {} pane(s) briefed.",
+        outcome.briefed(),
+        outcome.panes.len()
+    );
     Ok(())
 }
 

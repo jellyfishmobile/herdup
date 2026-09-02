@@ -18,6 +18,7 @@ pub mod preflight;
 pub mod registry;
 pub mod settings;
 pub mod template;
+pub mod terminal;
 
 pub use config::ConfigError;
 pub use herdr::{HerdrCli, HerdrError};

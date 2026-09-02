@@ -209,6 +209,39 @@ fn a_missing_binary_is_reported_as_not_found() {
 // ---- waiting --------------------------------------------------------------
 
 #[test]
+fn an_unknown_command_is_a_loud_error_not_a_silent_timeout() {
+    // herdr documents exit 2 as a CLI syntax error, which is always a herdup
+    // bug. Folding it into "the wait timed out" is exactly how a call to the
+    // non-existent `wait agent-status` survived three phases undetected.
+    let cli = client(
+        "syntax_wait",
+        json!([{
+            "match": ["wait", "agent-status"],
+            "responses": [{ "stderr": "unknown command: wait", "exit": 2 }]
+        }]),
+    );
+    match cli.wait_agent_status("w1:p1", AgentStatus::Idle, 100) {
+        Err(HerdrError::CliSyntax { args, stderr }) => {
+            assert!(args.contains("wait"));
+            assert!(stderr.contains("unknown command"));
+        }
+        other => panic!("expected CliSyntax, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_syntax_error_on_any_command_is_reported_as_such() {
+    let cli = client(
+        "syntax_any",
+        json!([{
+            "match": ["pane", "list"],
+            "responses": [{ "stderr": "unexpected argument", "exit": 2 }]
+        }]),
+    );
+    assert!(matches!(cli.pane_list(), Err(HerdrError::CliSyntax { .. })));
+}
+
+#[test]
 fn a_wait_timeout_is_an_outcome_not_an_error() {
     // herdr exits 1 with no JSON body when a wait expires. The launcher reacts
     // by withholding a briefing, which is normal operation — not a failure.
