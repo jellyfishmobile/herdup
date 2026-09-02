@@ -9,7 +9,6 @@ use crate::plan::{LaunchPlan, PaneRef};
 use crate::registry::Registry;
 use crate::settings::Settings;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// Finds an executable by base name.
@@ -451,10 +450,9 @@ fn check_git(project: &Path) -> GitStatus {
         return GitStatus::default();
     }
     let run = |args: &[&str]| -> Option<String> {
-        let out = Command::new("git")
+        let out = crate::proc::hidden_command("git")
             .args(args)
             .current_dir(project)
-            .stdin(Stdio::null())
             .output()
             .ok()?;
         out.status
@@ -513,9 +511,8 @@ pub fn check_gh() -> GhStatus {
             account: None,
         };
     };
-    let out = Command::new(path)
+    let out = crate::proc::hidden_command(path)
         .args(["auth", "status"])
-        .stdin(Stdio::null())
         .output();
     match out {
         Ok(out) => {

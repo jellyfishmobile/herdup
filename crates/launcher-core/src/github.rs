@@ -8,7 +8,6 @@
 //! exhaustively without creating anything on anyone's account.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -272,8 +271,8 @@ impl Gh {
     }
 
     fn run_in(&self, args: &[&str], cwd: Option<&Path>) -> Result<String> {
-        let mut cmd = Command::new(&self.exe);
-        cmd.args(args).stdin(Stdio::null());
+        let mut cmd = crate::proc::hidden_command(&self.exe);
+        cmd.args(args);
         if let Some(cwd) = cwd {
             cmd.current_dir(cwd);
         }

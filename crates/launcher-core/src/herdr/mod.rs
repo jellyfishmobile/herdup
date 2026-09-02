@@ -448,11 +448,11 @@ impl HerdrCli {
     }
 
     fn invoke(&self, args: &[String]) -> Result<Raw> {
-        let mut cmd = Command::new(&self.exe);
+        // Hidden: the app makes dozens of these per launch and two per poll.
+        let mut cmd = crate::proc::hidden_command(&self.exe);
         cmd.envs(self.env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
         cmd.args(self.prefix_args());
         cmd.args(args);
-        cmd.stdin(Stdio::null());
 
         let out = cmd.output().map_err(|source| {
             if source.kind() == std::io::ErrorKind::NotFound {
@@ -638,9 +638,8 @@ fn args<const N: usize>(parts: [&str; N]) -> Vec<String> {
 /// wrong (ground truth §7).
 pub fn which(name: &str) -> Option<PathBuf> {
     let finder = if cfg!(windows) { "where.exe" } else { "which" };
-    let out = Command::new(finder)
+    let out = crate::proc::hidden_command(finder)
         .arg(OsStr::new(name))
-        .stdin(Stdio::null())
         .output()
         .ok()?;
     if !out.status.success() {

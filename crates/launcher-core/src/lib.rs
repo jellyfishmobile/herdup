@@ -16,6 +16,7 @@ pub mod github;
 pub mod herdr;
 pub mod plan;
 pub mod preflight;
+pub(crate) mod proc;
 pub mod registry;
 pub mod settings;
 pub mod template;

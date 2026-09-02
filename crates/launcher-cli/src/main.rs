@@ -468,6 +468,9 @@ fn launch(args: &[String]) -> Result<(), AppError> {
     let session = flag(args, "--session").unwrap_or_else(|| "herdup".to_string());
     let want_terminal = !args.iter().any(|a| a == "--no-terminal");
     let skip_first_run = args.iter().any(|a| a == "--skip-first-run");
+    // One terminal per launch. First-run needs one so the user can answer
+    // prompts, and that same window stays attached for the finished team.
+    let mut terminal_opened = false;
 
     let registry = launcher_core::config::load_registry()?;
     let templates = launcher_core::config::load_templates(&registry)?;
@@ -580,13 +583,18 @@ fn launch(args: &[String]) -> Result<(), AppError> {
         let mut fr_session = fr.start(&cwd, &pending, &mut |_| {})?;
 
         // The user has to interact with these panes, so show them a terminal.
+        // The same window stays attached through the launch, so Stage 3 must not
+        // open a second one on top of it.
         if want_terminal {
             match launcher_core::terminal::open_with_fallback(
                 &cwd,
                 Some(&session),
                 settings.terminal.as_deref(),
             ) {
-                Ok(h) => println!("   opened a terminal: {}", h.display()),
+                Ok(h) => {
+                    terminal_opened = true;
+                    println!("   opened a terminal: {}", h.display());
+                }
                 Err(h) => println!("   could not open a terminal; run: {}", h.display()),
             }
         }
@@ -701,7 +709,9 @@ fn launch(args: &[String]) -> Result<(), AppError> {
     }
 
     // ---- Stage 3 --------------------------------------------------------
-    if want_terminal {
+    if terminal_opened {
+        println!("\nYour terminal is already attached to session '{session}'.");
+    } else if want_terminal {
         step("hand off");
         match launcher_core::terminal::open_with_fallback(
             &cwd,
