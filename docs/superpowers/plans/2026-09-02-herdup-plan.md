@@ -226,8 +226,28 @@ step; and the regression Phase 0 bought us — **a `manual`-tier CLI reporting
 
 Note: the old `ReReadPaneIds` scenario is gone with the compaction handling.
 
-**Exit** — plans execute; failures are legible; no briefing is ever sent to a
-non-ready pane.
+**Exit — COMPLETE 2026-09-02.**
+
+- [x] Executor walks a plan, resolving `PaneRef`s to real ids as panes appear.
+- [x] `AwaitIdle` trusts the **observed** `agent_status` over the wait's exit
+      code — a wait can land while the pane is really sitting on a prompt.
+- [x] Two independent briefing gates: the pane must have been observed `Ready`,
+      **and** the CLI must be `verified`. Either one withholds. A pane never
+      observed ready is withheld rather than assumed.
+- [x] Withheld briefings are kept for release, with the pane's recent output
+      captured so the UI can show *why*.
+- [x] No rollback on failure: earlier panes stand, the failing step is named,
+      and the workspace id is still returned so the user can go look.
+- [x] 9 executor tests, 86 total. clippy `-D warnings` and `fmt --check` clean.
+
+The Phase 0 finding now has an executable regression test:
+`an_unverified_cli_reporting_idle_is_still_not_briefed` scripts herdr into
+insisting the pane is `idle` and asserts the briefing is *withheld anyway*.
+
+**Design correction during the phase:** the first draft reused `Starting` for
+both "created" and "settled", which made the briefing gate ambiguous — a pane
+whose readiness was never confirmed could have been briefed. Split into an
+explicit `Ready` state so that only an *observed* ready pane can be typed into.
 
 ---
 

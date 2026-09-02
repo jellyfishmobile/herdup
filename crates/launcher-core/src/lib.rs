@@ -10,6 +10,7 @@
 //! Design: `docs/superpowers/specs/2026-09-02-herdup-design.md`
 
 pub mod config;
+pub mod execute;
 pub mod herdr;
 pub mod plan;
 pub mod registry;
