@@ -113,6 +113,27 @@ impl NewRepo {
         args
     }
 
+    /// The command as a human could read or paste it.
+    ///
+    /// Quotes any argument containing whitespace. The argv herdup actually
+    /// passes needs no quoting — nothing is shell-interpreted — but an echoed
+    /// command that joins on spaces is misleading: a multi-word description
+    /// printed bare looks like it was truncated to its first word.
+    pub fn display_command(&self) -> String {
+        let quoted: Vec<String> = self
+            .args()
+            .into_iter()
+            .map(|a| {
+                if a.is_empty() || a.chars().any(char::is_whitespace) {
+                    format!("\"{}\"", a.replace('"', "\\\""))
+                } else {
+                    a
+                }
+            })
+            .collect();
+        format!("gh {}", quoted.join(" "))
+    }
+
     /// Check everything that can be checked before creating anything.
     ///
     /// A remote repository cannot be un-created quietly, so a bad name or an

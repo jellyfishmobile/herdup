@@ -65,6 +65,30 @@ fn a_description_becomes_its_own_argument() {
 }
 
 #[test]
+fn the_echoed_command_quotes_multi_word_arguments() {
+    // A live run printed `--description Throwaway` for a multi-word
+    // description, which reads as if the value had been truncated. The argv is
+    // fine; the echo was not.
+    let mut repo = NewRepo::private("my-api", "D:\\work");
+    repo.description = Some("Throwaway repo. Safe to delete.".into());
+    let shown = repo.display_command();
+    assert!(
+        shown.contains("\"Throwaway repo. Safe to delete.\""),
+        "unquoted: {shown}"
+    );
+    assert!(shown.starts_with("gh repo create my-api --private --clone"));
+}
+
+#[test]
+fn the_echoed_command_leaves_simple_arguments_bare() {
+    let repo = NewRepo::private("my-api", "D:\\work");
+    assert_eq!(
+        repo.display_command(),
+        "gh repo create my-api --private --clone"
+    );
+}
+
+#[test]
 fn an_empty_description_is_omitted_entirely() {
     let mut repo = NewRepo::private("my-api", "D:\\work");
     repo.description = Some("   ".into());

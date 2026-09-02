@@ -781,7 +781,7 @@ fn new_repo(args: &[String]) -> Result<(), AppError> {
         return Ok(());
     }
 
-    println!("\n-> gh {}", repo.args().join(" "));
+    println!("\n-> {}", repo.display_command());
     let created = gh.create(&repo).map_err(AppError::Gh)?;
     println!(
         "   created {}",

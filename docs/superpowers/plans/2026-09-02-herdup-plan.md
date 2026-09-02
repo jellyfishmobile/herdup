@@ -411,11 +411,26 @@ degradation touches nothing else.
       no network, no account. Private is the default; `--public` must be asked
       for; an existing destination is refused rather than overwritten.
 - [x] Absent or logged-out `gh` disables only this flow, with the reason shown.
-- [ ] **A repository has never actually been created.** Verification was going
-      to create a throwaway repo and delete it, but the `gh` token lacks the
-      `delete_repo` scope — so the test would have left the repo behind. Stopped
-      rather than create something that could not be cleaned up. Needs either
-      `gh auth refresh -h github.com -s delete_repo` or a manual run.
+- [x] **Live run completed 2026-09-02.** After the user granted `delete_repo`,
+      `herdup-e2e-scratch` was created private, cloned, chained into a launch,
+      then deleted. Verified: repo `PRIVATE` on GitHub, clone had the right
+      remote, repo gone afterwards, 67 other repositories untouched, no herdr
+      session or process left behind.
+
+**Two things the live run showed that no unit test could:**
+
+- `gh repo create --clone` on a brand-new repo produces an **empty clone with no
+  commits**, on `master` rather than `main`. Preflight reads that correctly as a
+  clean repository with no warnings.
+- The chained launch entered the first-run stage and waited — correct, since a
+  brand-new folder has never been trusted — but with `--no-terminal` there was
+  no terminal in which to answer it. The one-pass flow therefore needs a
+  terminal, or the caller must clear first-run separately.
+
+**Defect found and fixed:** the echoed command joined argv on spaces, so a
+multi-word `--description` printed as `--description Throwaway` and read as if
+the value had been truncated. The argv was correct; the echo was not.
+`display_command()` now quotes arguments containing whitespace.
 
 ---
 

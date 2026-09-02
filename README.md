@@ -90,7 +90,7 @@ before completing a launch, so it starts no agents. See
 |---|---|
 | 0–6 core, CLI harness | done, verified against real herdr |
 | 7 desktop app | done, verified by the selector harness |
-| 8 GitHub new-repo | built and unit-tested; **a live repo creation has never been run** |
+| 8 GitHub new-repo | done — verified live: created, cloned and deleted a throwaway repo |
 | 9 packaging | `.msi` builds and validates; **never installed on a clean machine** |
 | macOS | **entirely unbuilt and unrun** |
 
