@@ -181,8 +181,27 @@ pane first / briefing last; flattening produces exactly one line; a dropped pane
 (preflight remediation) renumbers `from` references correctly; the coordinator
 briefing contains every teammate's role and CLI.
 
-**Exit** — every built-in template produces a correct plan. **No herdr required to
-run these tests.**
+**Exit — COMPLETE 2026-09-02.**
+
+- [x] `Step`/`LaunchPlan`/`PaneRef`, and `plan()` as a pure deterministic function.
+- [x] Exact step sequence asserted for the built-in templates; coordinator pane
+      created first, briefed last; every split references an earlier pane.
+- [x] Coordinator briefing carries a symbolic roster resolved to real pane ids at
+      execution time, and names each teammate's role, pane and CLI.
+- [x] Dropping a pane re-points orphaned children to their nearest surviving
+      ancestor; dropping the root promotes the next survivor and clears its split.
+- [x] `BriefingGate` on every briefing step, so the Phase 0 finding is carried
+      into execution rather than re-derived there.
+- [x] `launcher-cli plan` prints a dry run. 21 plan tests; 77 total. clippy
+      `-D warnings` and `fmt --check` clean. **No herdr required.**
+
+**Bug found by reading the dry run:** swapping a pane's CLI carried the template's
+flags across, producing `gemini --permission-mode acceptEdits` — a Claude Code
+flag handed to Gemini. A test had asserted this behaviour and a comment had
+rationalised it. Flags now survive a CLI swap only if the new CLI's registry
+entry lists them, and a discarded flag is recorded in `dropped_flags` and shown,
+never dropped silently. Same rule as the registry: never use a flag nobody
+verified for that CLI.
 
 ---
 

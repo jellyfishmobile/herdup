@@ -48,11 +48,16 @@ impl PaneSpec {
 
     /// The command line for this pane, e.g. `claude --permission-mode acceptEdits`.
     pub fn command(&self, binary: &str) -> String {
-        if self.flags.trim().is_empty() {
-            binary.to_string()
-        } else {
-            format!("{} {}", binary, self.flags.trim())
-        }
+        command_line(binary, &self.flags)
+    }
+}
+
+/// Join a binary and flag string, omitting whitespace-only flags.
+pub fn command_line(binary: &str, flags: &str) -> String {
+    if flags.trim().is_empty() {
+        binary.to_string()
+    } else {
+        format!("{} {}", binary, flags.trim())
     }
 }
 

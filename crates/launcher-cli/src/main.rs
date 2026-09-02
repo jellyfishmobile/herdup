@@ -20,6 +20,7 @@ const DEFAULT_SMOKE_SESSION: &str = "herdup-smoke";
 enum AppError {
     Herdr(HerdrError),
     Config(ConfigError),
+    Plan(launcher_core::plan::PlanError),
 }
 
 impl std::fmt::Display for AppError {
@@ -27,6 +28,7 @@ impl std::fmt::Display for AppError {
         match self {
             AppError::Herdr(e) => write!(f, "{e}"),
             AppError::Config(e) => write!(f, "{e}"),
+            AppError::Plan(e) => write!(f, "{e}"),
         }
     }
 }
@@ -48,6 +50,7 @@ fn main() -> std::process::ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("probe") => probe(),
         Some("config") => config(),
+        Some("plan") => show_plan(&args[1..]),
         Some("smoke") => smoke(&args[1..]),
         Some("help") | Some("--help") | Some("-h") | None => {
             usage();
@@ -81,7 +84,9 @@ fn usage() {
          usage:\n  \
          launcher-cli probe\n  \
          launcher-cli config\n  \
+         launcher-cli plan --template ID [--cwd PATH] [--skip N]... [--cli N=CLI]...\n  \
          launcher-cli smoke [--session NAME] [--cwd PATH]\n\n\
+         `plan` is a dry run: it prints what a launch would do and changes nothing.\n\
          `smoke` creates and destroys an isolated named session. It never touches\n\
          your default herdr session, whose panes may be real work."
     );
@@ -187,6 +192,98 @@ fn config() -> Result<(), AppError> {
     }
     println!("\n  * coordinator — created first, briefed last with the finished roster.");
     Ok(())
+}
+
+fn show_plan(args: &[String]) -> Result<(), AppError> {
+    let Some(id) = flag(args, "--template") else {
+        eprintln!("plan: --template ID is required (see `launcher-cli config` for ids)");
+        return Ok(());
+    };
+    let cwd = flag(args, "--cwd")
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let registry = launcher_core::config::load_registry()?;
+    let templates = launcher_core::config::load_templates(&registry)?;
+    let Some(template) = templates.get(&id) else {
+        eprintln!(
+            "plan: no template '{id}'. Known: {}",
+            template_ids(&templates)
+        );
+        return Ok(());
+    };
+
+    let mut request = launcher_core::plan::LaunchRequest::new(&cwd, template);
+    for raw in flags(args, "--skip") {
+        match raw.parse::<usize>() {
+            Ok(i) => request = request.skip_pane(i),
+            Err(_) => eprintln!("plan: ignoring non-numeric --skip {raw:?}"),
+        }
+    }
+    for raw in flags(args, "--cli") {
+        match raw.split_once('=') {
+            Some((i, cli)) => match i.parse::<usize>() {
+                Ok(i) => request = request.override_cli(i, cli),
+                Err(_) => eprintln!("plan: ignoring --cli {raw:?} (index must be a number)"),
+            },
+            None => eprintln!("plan: ignoring --cli {raw:?} (expected N=CLI)"),
+        }
+    }
+
+    let p = launcher_core::plan::plan(&request, &registry).map_err(AppError::Plan)?;
+
+    println!("project   : {}", p.project.display());
+    println!("workspace : {}", p.workspace_label);
+    println!("CLIs      : {}", p.distinct_clis().join(", "));
+    println!("\npanes:");
+    for pane in &p.panes {
+        println!(
+            "  #{} {:<12} {:<16} {}{}",
+            pane.pane.0,
+            pane.role,
+            pane.cli_display,
+            pane.command,
+            if pane.coordinator {
+                "   [coordinator]"
+            } else {
+                ""
+            }
+        );
+        if let Some(dropped) = &pane.dropped_flags {
+            println!(
+                "     dropped {dropped:?} — {} is not known to accept it",
+                pane.cli_display
+            );
+        }
+    }
+
+    let manual = p.requires_human_briefing();
+    if manual.is_empty() {
+        println!("\nAll briefings send automatically once each pane reports idle.");
+    } else {
+        println!(
+            "\n{} pane(s) will NOT be briefed automatically:",
+            manual.len()
+        );
+        for pane in &manual {
+            println!("  #{} {} ({})", pane.pane.0, pane.role, pane.cli_display);
+        }
+        println!(
+            "  These CLIs have unverified blocked-detection, so herdup will not type\n  \
+             into them unattended. You confirm each one after looking at the pane."
+        );
+    }
+
+    println!("\nsteps ({} total, nothing has run):", p.steps.len());
+    print!("{}", p.describe());
+    Ok(())
+}
+
+fn template_ids(t: &launcher_core::template::Templates) -> String {
+    t.iter()
+        .map(|x| x.id.clone())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn smoke(args: &[String]) -> Result<(), AppError> {
@@ -317,4 +414,13 @@ fn assert_that(cond: bool, what: &str) -> Result<(), HerdrError> {
 fn flag(args: &[String], name: &str) -> Option<String> {
     let i = args.iter().position(|a| a == name)?;
     args.get(i + 1).cloned()
+}
+
+/// All values of a repeatable flag, e.g. `--skip 1 --skip 3`.
+fn flags(args: &[String], name: &str) -> Vec<String> {
+    args.iter()
+        .enumerate()
+        .filter(|(_, a)| *a == name)
+        .filter_map(|(i, _)| args.get(i + 1).cloned())
+        .collect()
 }
