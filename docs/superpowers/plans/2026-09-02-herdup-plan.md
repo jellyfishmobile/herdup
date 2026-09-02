@@ -1,7 +1,7 @@
-# herdr launcher — implementation plan
+# herdup — implementation plan
 
 **Date:** 2026-09-02
-**Spec:** [`../specs/2026-09-02-herdr-launcher-design.md`](../specs/2026-09-02-herdr-launcher-design.md)
+**Spec:** [`../specs/2026-09-02-herdup-design.md`](../specs/2026-09-02-herdup-design.md)
 
 ## Sequencing principle
 

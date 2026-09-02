@@ -1,4 +1,4 @@
-# herdr launcher — design
+# herdup — design
 
 **Date:** 2026-09-02
 **Status:** approved for planning
@@ -165,8 +165,8 @@ All files are TOML. User files merge over built-ins by `id`, so upgrading the ap
 does not clobber edits and users only record their deltas.
 
 **Locations**
-- Windows: `%APPDATA%\herdr-launcher\`
-- macOS: `~/Library/Application Support/herdr-launcher/`
+- Windows: `%APPDATA%\herdup\`
+- macOS: `~/Library/Application Support/herdup/`
 
 ### 7.1 `registry.toml`
 
@@ -265,7 +265,7 @@ warm, which is the common case after first run.
 
 Auth is per-CLI, not per-pane: three `claude` panes need one login.
 
-1. `herdr workspace create --cwd <project> --label "herdr-launcher setup" --no-focus`
+1. `herdr workspace create --cwd <project> --label "herdup setup" --no-focus`
 2. One pane per un-verified CLI, each running the **bare binary with no flags** —
    permission flags are irrelevant to logging in and could suppress the prompt.
 3. Open the terminal attached to this workspace. Some login flows need a real TTY;
