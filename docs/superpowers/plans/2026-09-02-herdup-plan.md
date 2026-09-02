@@ -273,8 +273,28 @@ explicit `Ready` state so that only an *observed* ready pane can be typed into.
 writes `[verified]`; cancellation tears down the setup workspace; URL and device
 codes are extracted from realistic login output.
 
-**Exit** — a launch with a missing CLI is blocked with options; a launch with an
-unauthenticated CLI routes through Stage 1 and completes.
+**Exit — COMPLETE 2026-09-02.**
+
+- [x] Binary detection behind a `BinaryResolver` trait, so tests stub PATH
+      instead of depending on what the machine happens to have installed.
+- [x] Missing CLI blocks and names the panes needing it, with an install command,
+      a docs link, and the installed CLIs it could be switched to.
+- [x] Verification cache keyed by **CLI + project**, because a trust prompt is
+      per-folder and the tighter key can never wrongly skip. Trailing separators
+      normalised; a corrupt settings file degrades to defaults rather than
+      refusing to launch.
+- [x] Stage 1 runs the **bare binary with no flags** (asserted on exact argv) in
+      the target project directory, mirrors pane output, and lifts URLs and
+      device codes into copy-ready hints.
+- [x] Abandoning the pass caches nothing; teardown closes the workspace even if
+      a pane refuses to close.
+- [x] `launcher-cli preflight` verified against the real machine. 24 preflight
+      tests, 110 total. clippy `-D warnings` and `fmt --check` clean.
+
+**UX correction found by running it for real:** a stopped server was listed as
+"blocking launch" on the same line that said herdup starts one automatically.
+Split into `blocking_issues()` (the user must act) and `auto_resolvable_issues()`
+(herdup handles it), so `can_launch()` no longer sends people to fix a non-problem.
 
 ---
 

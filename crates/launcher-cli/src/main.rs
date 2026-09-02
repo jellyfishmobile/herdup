@@ -51,6 +51,7 @@ fn main() -> std::process::ExitCode {
         Some("probe") => probe(),
         Some("config") => config(),
         Some("plan") => show_plan(&args[1..]),
+        Some("preflight") => show_preflight(&args[1..]),
         Some("smoke") => smoke(&args[1..]),
         Some("help") | Some("--help") | Some("-h") | None => {
             usage();
@@ -85,6 +86,7 @@ fn usage() {
          launcher-cli probe\n  \
          launcher-cli config\n  \
          launcher-cli plan --template ID [--cwd PATH] [--skip N]... [--cli N=CLI]...\n  \
+         launcher-cli preflight --template ID [--cwd PATH] [--session NAME]\n  \
          launcher-cli smoke [--session NAME] [--cwd PATH]\n\n\
          `plan` is a dry run: it prints what a launch would do and changes nothing.\n\
          `smoke` creates and destroys an isolated named session. It never touches\n\
@@ -284,6 +286,146 @@ fn template_ids(t: &launcher_core::template::Templates) -> String {
         .map(|x| x.id.clone())
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn show_preflight(args: &[String]) -> Result<(), AppError> {
+    use launcher_core::preflight::{
+        check_gh, summarise, HerdrStatus, Issue, Preflight, SystemResolver,
+    };
+
+    let Some(id) = flag(args, "--template") else {
+        eprintln!("preflight: --template ID is required");
+        return Ok(());
+    };
+    let cwd = flag(args, "--cwd")
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let session = flag(args, "--session").unwrap_or_else(|| "herdup".to_string());
+
+    let registry = launcher_core::config::load_registry()?;
+    let templates = launcher_core::config::load_templates(&registry)?;
+    let Some(template) = templates.get(&id) else {
+        eprintln!(
+            "preflight: no template '{id}'. Known: {}",
+            template_ids(&templates)
+        );
+        return Ok(());
+    };
+    let settings = launcher_core::Settings::load();
+    let p = launcher_core::plan::plan(
+        &launcher_core::plan::LaunchRequest::new(&cwd, template),
+        &registry,
+    )
+    .map_err(AppError::Plan)?;
+
+    let herdr = HerdrCli::discover()?.with_session(&session);
+    let pf = Preflight::run(&herdr, &p, &registry, &settings, &SystemResolver);
+
+    println!("project : {}", cwd.display());
+    println!("session : {session}");
+    match &pf.herdr {
+        HerdrStatus::Ready { version } => println!("herdr   : {version}, server up"),
+        HerdrStatus::ServerDown { version } => {
+            println!("herdr   : {version}, no server for this session (herdup will start one)")
+        }
+        HerdrStatus::TooOld { found, required } => {
+            println!("herdr   : {found} — TOO OLD, need {required}")
+        }
+        HerdrStatus::ProtocolMismatch { version, .. } => println!(
+            "herdr   : {version}, but a server on a different protocol is running \
+             (left alone — restarting it would kill its panes)"
+        ),
+        HerdrStatus::Missing => println!("herdr   : NOT FOUND"),
+    }
+
+    let gh = check_gh();
+    match gh.blocker() {
+        None => println!(
+            "gh      : ready{}",
+            gh.account
+                .as_deref()
+                .map(|a| format!(" ({a})"))
+                .unwrap_or_default()
+        ),
+        Some(why) => println!("gh      : {why} — only the new-repo flow is affected"),
+    }
+
+    println!("\nCLIs needed by '{id}':");
+    for cli in &pf.clis {
+        println!("  {}", summarise(cli));
+    }
+
+    let first_run = pf.needs_first_run();
+    if first_run.is_empty() {
+        println!("\nFirst-run: nothing to do (all cached for this project).");
+    } else {
+        println!(
+            "\nFirst-run needed for: {}",
+            first_run
+                .iter()
+                .map(|c| c.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        println!(
+            "  Stage 1 opens one bare pane per CLI in this project so logins and\n  \
+             first-run 'trust this folder' prompts are cleared before the team is built."
+        );
+    }
+
+    for issue in pf.auto_resolvable_issues() {
+        if issue.is_server_startable() {
+            println!("\nNote: no server for this session yet — herdup starts one at launch.");
+        }
+    }
+
+    let issues = pf.blocking_issues();
+    if issues.is_empty() {
+        println!("\nREADY TO LAUNCH");
+        return Ok(());
+    }
+    println!("\n{} issue(s) you need to resolve:", issues.len());
+    for issue in &issues {
+        match issue {
+            Issue::HerdrMissing => println!("  - herdr is not installed"),
+            Issue::HerdrTooOld { found, required } => {
+                println!("  - herdr {found} is older than {required}")
+            }
+            Issue::HerdrProtocolMismatch { .. } => println!(
+                "  - a herdr server on an older protocol is running. Restarting it exits\n    \
+                 its panes, so herdup will not do it for you."
+            ),
+            Issue::ServerDown => println!("  - no server yet (herdup starts one at launch)"),
+            Issue::CliMissing {
+                display_name,
+                install_command,
+                docs_url,
+                panes,
+                cli,
+            } => {
+                println!(
+                    "  - {display_name} not found, needed by {} pane(s)",
+                    panes.len()
+                );
+                if let Some(cmd) = install_command {
+                    println!("      install: {cmd}");
+                } else if let Some(url) = docs_url {
+                    println!("      docs:    {url}");
+                }
+                let alts = pf.alternatives_for(cli);
+                if !alts.is_empty() {
+                    println!(
+                        "      or switch those panes to: {}",
+                        alts.iter()
+                            .map(|a| a.id.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn smoke(args: &[String]) -> Result<(), AppError> {

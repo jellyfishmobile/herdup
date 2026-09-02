@@ -11,13 +11,18 @@
 
 pub mod config;
 pub mod execute;
+pub mod firstrun;
 pub mod herdr;
 pub mod plan;
+pub mod preflight;
 pub mod registry;
+pub mod settings;
 pub mod template;
 
 pub use config::ConfigError;
 pub use herdr::{HerdrCli, HerdrError};
 pub use plan::{plan, BriefingGate, LaunchPlan, LaunchRequest, PaneRef, Step};
+pub use preflight::{Preflight, SystemResolver};
 pub use registry::{BriefingTrust, CliEntry, Registry};
+pub use settings::Settings;
 pub use template::{PaneSpec, Template, Templates};
