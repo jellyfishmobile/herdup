@@ -89,7 +89,7 @@ fn usage() {
          launcher-cli plan --template ID [--cwd PATH] [--skip N]... [--cli N=CLI]...\n  \
          launcher-cli preflight --template ID [--cwd PATH] [--session NAME]\n  \
          launcher-cli launch --template ID [--cwd PATH] [--session NAME]\n                       \
-         [--skip N]... [--cli N=CLI] [--no-terminal] [--skip-first-run]\n  \
+         [--skip N]... [--cli N=CLI] [--no-terminal] [--skip-first-run] [--yes]\n  \
          launcher-cli smoke [--session NAME] [--cwd PATH]\n\n\
          `plan` is a dry run: it prints what a launch would do and changes nothing.\n\
          `smoke` creates and destroys an isolated named session. It never touches\n\
@@ -376,6 +376,14 @@ fn show_preflight(args: &[String]) -> Result<(), AppError> {
         );
     }
 
+    let warnings = pf.warnings();
+    if !warnings.is_empty() {
+        println!("\nBefore launching agents into this folder:");
+        for warning in &warnings {
+            println!("  ! {}", warning.explain());
+        }
+    }
+
     for issue in pf.auto_resolvable_issues() {
         if issue.is_server_startable() {
             println!("\nNote: no server for this session yet — herdup starts one at launch.");
@@ -390,6 +398,10 @@ fn show_preflight(args: &[String]) -> Result<(), AppError> {
     println!("\n{} issue(s) you need to resolve:", issues.len());
     for issue in &issues {
         match issue {
+            Issue::ProjectMissing { path } => {
+                println!("  - the project folder does not exist: {path}")
+            }
+            Issue::ProjectNotADirectory { path } => println!("  - not a folder: {path}"),
             Issue::HerdrMissing => println!("  - herdr is not installed"),
             Issue::HerdrTooOld { found, required } => {
                 println!("  - herdr {found} is older than {required}")
@@ -490,29 +502,42 @@ fn launch(args: &[String]) -> Result<(), AppError> {
     if !blocking.is_empty() {
         println!("\nCannot launch — {} issue(s):", blocking.len());
         for issue in &blocking {
-            match issue {
-                Issue::CliMissing {
-                    display_name,
-                    install_command,
-                    cli,
-                    ..
-                } => {
-                    println!("  - {display_name} is not installed");
-                    if let Some(cmd) = install_command {
-                        println!("      {cmd}");
-                    }
-                    let alts = pf.alternatives_for(cli);
-                    if !alts.is_empty() {
-                        println!("      or re-run with --cli N={}", alts[0].id);
-                    }
+            println!("  - {}", issue.explain());
+            if let Issue::CliMissing {
+                install_command,
+                cli,
+                ..
+            } = issue
+            {
+                if let Some(cmd) = install_command {
+                    println!("      {cmd}");
                 }
-                other => println!("  - {other:?}"),
+                let alts = pf.alternatives_for(cli);
+                if !alts.is_empty() {
+                    println!("      or re-run with --cli N={}", alts[0].id);
+                }
             }
         }
         return Err(AppError::Herdr(HerdrError::Api {
             code: "preflight_blocked".into(),
             message: format!("{} unresolved issue(s)", blocking.len()),
         }));
+    }
+
+    // Warnings are not blockers, but a launch puts agents with file-editing
+    // permissions into this folder. That must be a decision, never an accident.
+    let warnings = pf.warnings();
+    if !warnings.is_empty() && !args.iter().any(|a| a == "--yes") {
+        println!(
+            "\nLaunching {} agent(s) into {}",
+            p.panes.len(),
+            cwd.display()
+        );
+        for warning in &warnings {
+            println!("  ! {}", warning.explain());
+        }
+        println!("\nNothing has been created. Re-run with --yes to proceed anyway.");
+        return Ok(());
     }
 
     step("ensure server");
@@ -559,16 +584,23 @@ fn launch(args: &[String]) -> Result<(), AppError> {
 
         let deadline = Instant::now() + Duration::from_secs(300);
         while !fr_session.all_verified() && Instant::now() < deadline {
-            fr.poll_once(&mut fr_session, &mut |event| {
-                if let launcher_core::firstrun::FirstRunEvent::HintFound { cli, hint } = &event {
-                    println!("   [{cli}] {:?}: {}", hint.kind, hint.value);
+            // Print on state *change* only. Printing every poll produced dozens
+            // of identical "waiting for you" lines and buried the hints.
+            fr.poll_once(&mut fr_session, &mut |event| match &event {
+                launcher_core::firstrun::FirstRunEvent::HintFound { cli, hint } => {
+                    println!("   [{cli}] {:?}: {}", hint.kind, hint.value)
                 }
+                launcher_core::firstrun::FirstRunEvent::StateChanged { cli, state } => {
+                    match state {
+                        FirstRunState::NeedsYou => {
+                            println!("   [{cli}] waiting for you — answer it in the terminal")
+                        }
+                        FirstRunState::Verified => println!("   [{cli}] ready"),
+                        FirstRunState::Waiting => {}
+                    }
+                }
+                _ => {}
             });
-            for pane in fr_session.pending() {
-                if pane.state == FirstRunState::NeedsYou {
-                    println!("   [{}] waiting for you in pane {}", pane.cli, pane.pane_id);
-                }
-            }
             if fr_session.all_verified() {
                 break;
             }

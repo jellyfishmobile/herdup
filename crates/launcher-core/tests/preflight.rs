@@ -5,7 +5,7 @@ use launcher_core::firstrun::{
 };
 use launcher_core::herdr::HerdrCli;
 use launcher_core::plan::{plan, LaunchRequest, PaneRef};
-use launcher_core::preflight::{BinaryResolver, HerdrStatus, Issue, Preflight};
+use launcher_core::preflight::{BinaryResolver, HerdrStatus, Issue, Preflight, Warning};
 use launcher_core::registry::Registry;
 use launcher_core::settings::Settings;
 use launcher_core::template::Templates;
@@ -15,8 +15,14 @@ use std::path::{Path, PathBuf};
 
 const FAKE: &str = env!("CARGO_BIN_EXE_fake-herdr");
 
-fn project() -> &'static Path {
-    Path::new("D:\\work\\herdup")
+/// A real directory on disk.
+///
+/// It must exist: preflight now refuses to launch into a path that does not,
+/// after a mistyped path drove a launch into a directory nobody intended.
+fn project() -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("herdup-proj-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("create project dir");
+    dir
 }
 
 /// Stubbed PATH, so tests do not depend on what is installed on the machine.
@@ -74,7 +80,8 @@ fn squad_plan(swap: Option<(usize, &str)>) -> launcher_core::plan::LaunchPlan {
     let reg = Registry::builtin();
     let templates = Templates::builtin();
     let t = templates.get("squad").expect("squad");
-    let mut req = LaunchRequest::new(project(), t);
+    let dir = project();
+    let mut req = LaunchRequest::new(&dir, t);
     if let Some((i, cli)) = swap {
         req = req.override_cli(i, cli);
     }
@@ -275,6 +282,126 @@ fn an_old_herdr_is_rejected_because_pane_ids_compact_below_0_8() {
 }
 
 // ---------------------------------------------------------------------------
+// project guardrails
+//
+// These exist because of a real incident: a mistyped path drove a launch that
+// started four agents with bypassed permissions inside a directory nobody
+// intended. Nothing validated the project, and nothing warned that the agents
+// would be editing uncommitted work.
+// ---------------------------------------------------------------------------
+
+fn plan_for(project: &Path) -> launcher_core::plan::LaunchPlan {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("squad").expect("squad");
+    plan(&LaunchRequest::new(project, t), &reg).expect("plans")
+}
+
+fn preflight_for(project: &Path, name: &str) -> Preflight {
+    let cli = client(name, Value::Array(healthy_herdr()));
+    Preflight::run(
+        &cli,
+        &plan_for(project),
+        &Registry::builtin(),
+        &Settings::default(),
+        &StubResolver::with(&["claude"]),
+    )
+}
+
+#[test]
+fn a_project_path_that_does_not_exist_blocks_the_launch() {
+    let missing = std::env::temp_dir().join("herdup-definitely-not-here-xyz");
+    let _ = std::fs::remove_dir_all(&missing);
+    let pf = preflight_for(&missing, "missing_project");
+
+    assert!(!pf.project_exists);
+    assert!(!pf.can_launch(), "a typo must never reach herdr");
+    match pf.blocking_issues().first() {
+        Some(Issue::ProjectMissing { path }) => {
+            assert!(path.contains("herdup-definitely-not-here"))
+        }
+        other => panic!("expected ProjectMissing first, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_project_path_that_is_a_file_blocks_the_launch() {
+    let dir = temp_dir("file_project");
+    let file = dir.join("not-a-folder.txt");
+    std::fs::write(&file, "hi").unwrap();
+    let pf = preflight_for(&file, "file_project_pf");
+
+    assert!(pf.project_exists);
+    assert!(!pf.project_is_dir);
+    assert!(!pf.can_launch());
+    assert!(matches!(
+        pf.blocking_issues().first(),
+        Some(Issue::ProjectNotADirectory { .. })
+    ));
+}
+
+#[test]
+fn a_folder_without_version_control_warns_that_nothing_can_be_undone() {
+    let dir = temp_dir("no_git");
+    let pf = preflight_for(&dir, "no_git_pf");
+
+    assert!(!pf.git.is_repo);
+    assert_eq!(pf.warnings(), vec![Warning::NotAGitRepo]);
+    // A warning is not a blocker: the user may genuinely mean it.
+    assert!(pf.can_launch());
+    assert!(pf.warnings()[0].explain().contains("undo"));
+}
+
+#[test]
+fn a_dirty_repository_warns_before_agents_start_editing() {
+    let dir = temp_dir("dirty_repo");
+    init_repo(&dir);
+    std::fs::write(dir.join("uncommitted.txt"), "work in progress").unwrap();
+
+    let pf = preflight_for(&dir, "dirty_repo_pf");
+    assert!(pf.git.is_repo);
+    assert!(pf.git.is_dirty());
+
+    match pf.warnings().first() {
+        Some(Warning::UncommittedChanges { count, .. }) => assert!(*count >= 1),
+        other => panic!("expected UncommittedChanges, got {other:?}"),
+    }
+    assert!(pf.can_launch(), "still the user's call");
+    assert!(pf.warnings()[0].explain().contains("undo"));
+}
+
+#[test]
+fn a_clean_repository_produces_no_warnings() {
+    let dir = temp_dir("clean_repo");
+    init_repo(&dir);
+    let pf = preflight_for(&dir, "clean_repo_pf");
+
+    assert!(pf.git.is_repo);
+    assert!(!pf.git.is_dirty());
+    assert!(pf.warnings().is_empty());
+    assert!(pf.can_launch());
+}
+
+/// Create a git repo with one commit, isolated from the developer's config.
+fn init_repo(dir: &Path) {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .expect("git available");
+    };
+    git(&["init", "-q"]);
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["config", "user.name", "test"]);
+    std::fs::write(dir.join("README.md"), "# test").unwrap();
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "initial"]);
+}
+
+// ---------------------------------------------------------------------------
 // the verification cache
 // ---------------------------------------------------------------------------
 
@@ -289,7 +416,7 @@ fn a_cache_hit_skips_first_run_and_a_miss_does_not() {
     assert_eq!(cold.needs_first_run().len(), 1);
 
     let mut settings = Settings::default();
-    settings.mark_verified("claude", project());
+    settings.mark_verified("claude", &project());
     let warm = Preflight::run(&cli, &plan, &reg, &settings, &resolver);
     assert!(warm.needs_first_run().is_empty());
 }
@@ -337,12 +464,12 @@ fn settings_round_trip_through_disk() {
         projects_root: Some("D:\\work".into()),
         ..Default::default()
     };
-    settings.mark_verified("claude", project());
+    settings.mark_verified("claude", &project());
     settings.save_to(&dir).expect("saves");
 
     let loaded = Settings::load_from(Some(&dir));
     assert_eq!(loaded.projects_root.as_deref(), Some("D:\\work"));
-    assert!(loaded.is_verified("claude", project()));
+    assert!(loaded.is_verified("claude", &project()));
     assert_eq!(loaded.verified.len(), 1);
 }
 
@@ -359,20 +486,20 @@ fn a_corrupt_settings_file_degrades_to_defaults_rather_than_failing() {
 #[test]
 fn marking_verified_twice_does_not_duplicate_the_record() {
     let mut settings = Settings::default();
-    settings.mark_verified("claude", project());
-    settings.mark_verified("claude", project());
+    settings.mark_verified("claude", &project());
+    settings.mark_verified("claude", &project());
     assert_eq!(settings.verified.len(), 1);
 
-    settings.forget("claude", project());
+    settings.forget("claude", &project());
     assert!(settings.verified.is_empty());
 }
 
 #[test]
 fn unverified_filters_a_list_of_clis() {
     let mut settings = Settings::default();
-    settings.mark_verified("claude", project());
+    settings.mark_verified("claude", &project());
     assert_eq!(
-        settings.unverified(&["claude", "codex", "droid"], project()),
+        settings.unverified(&["claude", "codex", "droid"], &project()),
         vec!["codex", "droid"]
     );
 }
@@ -472,7 +599,7 @@ fn a_first_run_pane_runs_the_bare_binary_with_no_flags() {
         ]),
     );
     let session = FirstRun::new(&cli)
-        .start(project(), &targets(), &mut |_| {})
+        .start(&project(), &targets(), &mut |_| {})
         .expect("starts");
     assert_eq!(session.workspace_id, "w9");
     assert_eq!(session.panes[0].pane_id, "w9:p1");
@@ -503,7 +630,7 @@ fn a_cli_reaching_its_prompt_is_marked_verified_and_cached() {
     let fr = FirstRun::new(&cli);
     let mut events = Vec::new();
     let mut session = fr
-        .start(project(), &targets(), &mut |e| events.push(e))
+        .start(&project(), &targets(), &mut |e| events.push(e))
         .expect("starts");
 
     fr.poll_once(&mut session, &mut |e| events.push(e));
@@ -522,7 +649,7 @@ fn a_cli_reaching_its_prompt_is_marked_verified_and_cached() {
 
     let mut settings = Settings::default();
     session.apply_to(&mut settings);
-    assert!(settings.is_verified("claude", project()));
+    assert!(settings.is_verified("claude", &project()));
 }
 
 #[test]
@@ -538,7 +665,7 @@ fn an_abandoned_pass_caches_nothing() {
     );
     let fr = FirstRun::new(&cli);
     let mut session = fr
-        .start(project(), &targets(), &mut |_| {})
+        .start(&project(), &targets(), &mut |_| {})
         .expect("starts");
     fr.poll_once(&mut session, &mut |_| {});
 
@@ -563,7 +690,7 @@ fn teardown_closes_the_workspace_even_if_a_pane_refuses_to_close() {
     );
     let fr = FirstRun::new(&cli);
     let session = fr
-        .start(project(), &targets(), &mut |_| {})
+        .start(&project(), &targets(), &mut |_| {})
         .expect("starts");
     fr.teardown(&session).expect("workspace still closed");
 }

@@ -113,6 +113,11 @@ pub struct PreflightDto {
     clis: Vec<CliStatusDto>,
     needs_first_run: Vec<String>,
     blocking: Vec<String>,
+    /// Not blockers, but things a human must acknowledge before agents start
+    /// editing — an unversioned folder, or uncommitted work already in the tree.
+    warnings: Vec<String>,
+    project: String,
+    git_branch: Option<String>,
     can_launch: bool,
 }
 
@@ -367,24 +372,12 @@ fn run_preflight(options: LaunchOptions) -> Result<PreflightDto, String> {
             })
             .collect(),
         needs_first_run: pf.needs_first_run().iter().map(|c| c.id.clone()).collect(),
-        blocking: pf.blocking_issues().iter().map(describe_issue).collect(),
+        blocking: pf.blocking_issues().iter().map(|i| i.explain()).collect(),
+        warnings: pf.warnings().iter().map(|w| w.explain()).collect(),
+        project: pf.project.display().to_string(),
+        git_branch: pf.git.branch.clone(),
         can_launch: pf.can_launch(),
     })
-}
-
-fn describe_issue(issue: &launcher_core::preflight::Issue) -> String {
-    use launcher_core::preflight::Issue;
-    match issue {
-        Issue::HerdrMissing => "herdr is not installed".into(),
-        Issue::HerdrTooOld { found, required } => {
-            format!("herdr {found} is older than the required {required}")
-        }
-        Issue::HerdrProtocolMismatch { .. } => {
-            "a herdr server on a different protocol is running".into()
-        }
-        Issue::ServerDown => "no herdr server yet".into(),
-        Issue::CliMissing { display_name, .. } => format!("{display_name} is not installed"),
-    }
 }
 
 // ---- first run -------------------------------------------------------------

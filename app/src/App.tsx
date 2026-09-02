@@ -387,9 +387,40 @@ function PreflightStep(props: {
   busy: boolean;
 }) {
   const r = props.report;
+  // Warnings must be acknowledged individually. A launch puts agents with
+  // file-editing permissions into this folder; that should never be one click
+  // away from a mistyped path.
+  const [ack, setAck] = useState<Set<number>>(new Set());
+  const allAcked = r.warnings.every((_, i) => ack.has(i));
+
   return (
     <section>
       <h2>Environment</h2>
+
+      <div className="confirm">
+        <div>
+          Launching <strong>{props.plan?.panes.length ?? 0} agent(s)</strong> into
+        </div>
+        <code>{r.project}</code>
+        {r.git_branch && <div className="muted">on branch {r.git_branch}</div>}
+      </div>
+
+      {r.warnings.map((w, i) => (
+        <label key={i} className="ackbox">
+          <input
+            type="checkbox"
+            checked={ack.has(i)}
+            onChange={(e) =>
+              setAck((s) => {
+                const next = new Set(s);
+                e.target.checked ? next.add(i) : next.delete(i);
+                return next;
+              })
+            }
+          />
+          <span>{w}</span>
+        </label>
+      ))}
       <ul className="list">
         <li>
           <strong>{r.herdr}</strong>
@@ -456,9 +487,14 @@ function PreflightStep(props: {
 
       <div className="actions">
         <button onClick={props.onBack}>Back</button>
-        <button className="primary" onClick={props.onNext} disabled={!r.can_launch || props.busy}>
+        <button
+          className="primary"
+          onClick={props.onNext}
+          disabled={!r.can_launch || !allAcked || props.busy}
+        >
           {r.needs_first_run.length > 0 ? "Start first run" : "Launch"}
         </button>
+        {!allAcked && <span className="muted">acknowledge the warnings above to continue</span>}
       </div>
     </section>
   );

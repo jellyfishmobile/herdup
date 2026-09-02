@@ -78,6 +78,10 @@ export type PreflightReport = {
   clis: CliStatus[];
   needs_first_run: string[];
   blocking: string[];
+  /// Not blockers — things to acknowledge before agents start editing.
+  warnings: string[];
+  project: string;
+  git_branch: string | null;
   can_launch: boolean;
 };
 

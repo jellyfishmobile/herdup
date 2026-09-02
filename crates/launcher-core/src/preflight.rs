@@ -102,9 +102,67 @@ impl GhStatus {
     }
 }
 
+/// What version control can tell us about the project.
+///
+/// Agents launched here run with permission flags that let them edit files. Git
+/// state is the difference between "a change I can undo" and "a change I cannot".
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GitStatus {
+    pub is_repo: bool,
+    pub branch: Option<String>,
+    /// Count of modified, staged and untracked entries.
+    pub dirty_files: usize,
+}
+
+impl GitStatus {
+    pub fn is_dirty(&self) -> bool {
+        self.is_repo && self.dirty_files > 0
+    }
+}
+
+/// Something worth a human's explicit acknowledgement, but not a blocker.
+///
+/// Kept distinct from [`Issue`]: an issue means herdup cannot launch, a warning
+/// means it should not launch *silently*.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Warning {
+    /// Uncommitted work is already in the tree. Anything an agent changes will
+    /// be mixed into it, and `git checkout` is no longer a clean undo.
+    UncommittedChanges {
+        count: usize,
+        branch: Option<String>,
+    },
+    /// No version control at all: nothing an agent does here can be undone.
+    NotAGitRepo,
+}
+
+impl Warning {
+    pub fn explain(&self) -> String {
+        match self {
+            Warning::UncommittedChanges { count, branch } => format!(
+                "{count} uncommitted change(s) on {}. Anything the agents edit will be mixed \
+                 into work you have not committed, so `git checkout` is no longer a clean undo. \
+                 Commit or stash first if you want a way back.",
+                branch.as_deref().unwrap_or("this branch")
+            ),
+            Warning::NotAGitRepo => "This folder is not a git repository, so there is no way to \
+                undo anything the agents change. Consider `git init` first."
+                .into(),
+        }
+    }
+}
+
 /// Something that must be resolved before launching.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Issue {
+    /// The project folder does not exist.
+    ProjectMissing {
+        path: String,
+    },
+    /// The path exists but is a file, not a directory.
+    ProjectNotADirectory {
+        path: String,
+    },
     HerdrMissing,
     HerdrTooOld {
         found: String,
@@ -128,6 +186,35 @@ impl Issue {
     pub fn is_server_startable(&self) -> bool {
         matches!(self, Issue::ServerDown)
     }
+
+    /// A sentence for a human.
+    ///
+    /// Lives here so the CLI, the GUI and any future surface say the same thing.
+    /// It previously did not, and a `{:?}` fallback leaked
+    /// `ProjectMissing { path: "..." }` into the terminal.
+    pub fn explain(&self) -> String {
+        match self {
+            Issue::ProjectMissing { path } => {
+                format!("the project folder does not exist: {path}")
+            }
+            Issue::ProjectNotADirectory { path } => {
+                format!("that path is a file, not a folder: {path}")
+            }
+            Issue::HerdrMissing => "herdr is not installed".into(),
+            Issue::HerdrTooOld { found, required } => {
+                format!("herdr {found} is older than the required {required}")
+            }
+            Issue::HerdrProtocolMismatch { .. } => {
+                "a herdr server on a different protocol is running; restarting it would exit \
+                 its panes, so herdup will not do it for you"
+                    .into()
+            }
+            Issue::ServerDown => "no herdr server yet (herdup starts one at launch)".into(),
+            Issue::CliMissing { display_name, .. } => {
+                format!("{display_name} is not installed")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -135,6 +222,9 @@ pub struct Preflight {
     pub herdr: HerdrStatus,
     pub clis: Vec<CliStatus>,
     pub project: PathBuf,
+    pub project_exists: bool,
+    pub project_is_dir: bool,
+    pub git: GitStatus,
 }
 
 impl Preflight {
@@ -146,16 +236,53 @@ impl Preflight {
         settings: &Settings,
         resolver: &dyn BinaryResolver,
     ) -> Preflight {
+        let project = plan.project.clone();
         Preflight {
             herdr: check_herdr(herdr),
             clis: check_clis(plan, registry, settings, resolver),
-            project: plan.project.clone(),
+            project_exists: project.exists(),
+            project_is_dir: project.is_dir(),
+            git: check_git(&project),
+            project,
         }
+    }
+
+    /// Things a human should acknowledge before agents start editing.
+    ///
+    /// Never blocking: the user may genuinely want to launch into a dirty tree.
+    /// But it must be a decision, not an accident.
+    pub fn warnings(&self) -> Vec<Warning> {
+        if !self.project_is_dir {
+            return Vec::new(); // the missing-project issue covers it
+        }
+        let mut out = Vec::new();
+        if !self.git.is_repo {
+            out.push(Warning::NotAGitRepo);
+        } else if self.git.is_dirty() {
+            out.push(Warning::UncommittedChanges {
+                count: self.git.dirty_files,
+                branch: self.git.branch.clone(),
+            });
+        }
+        out
     }
 
     /// Everything blocking a launch, most fundamental first.
     pub fn issues(&self) -> Vec<Issue> {
         let mut issues = Vec::new();
+
+        // Checked first: launching agents into a path that is not a project is
+        // never what someone meant, and a typo'd path should never reach herdr.
+        if !self.project_exists {
+            issues.push(Issue::ProjectMissing {
+                path: self.project.display().to_string(),
+            });
+        } else if !self.project_is_dir {
+            issues.push(Issue::ProjectNotADirectory {
+                path: self.project.display().to_string(),
+            });
+        }
+
         match &self.herdr {
             HerdrStatus::Missing => issues.push(Issue::HerdrMissing),
             HerdrStatus::TooOld { found, required } => issues.push(Issue::HerdrTooOld {
@@ -313,6 +440,48 @@ fn check_clis(
             }
         })
         .collect()
+}
+
+/// Read version-control state for the project.
+///
+/// Best-effort and read-only: `git` may be absent, and a failure here must never
+/// stop a launch — it only means we cannot warn.
+fn check_git(project: &Path) -> GitStatus {
+    if !project.is_dir() {
+        return GitStatus::default();
+    }
+    let run = |args: &[&str]| -> Option<String> {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(project)
+            .stdin(Stdio::null())
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+
+    // `--is-inside-work-tree` is false for a plain directory and errors outside
+    // a repo, so its success is the repo test.
+    let is_repo = run(&["rev-parse", "--is-inside-work-tree"])
+        .map(|s| s.trim() == "true")
+        .unwrap_or(false);
+    if !is_repo {
+        return GitStatus::default();
+    }
+
+    GitStatus {
+        is_repo: true,
+        branch: run(&["rev-parse", "--abbrev-ref", "HEAD"])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        // --porcelain counts modified, staged and untracked alike, which is the
+        // right notion of "work that is not safely committed".
+        dirty_files: run(&["status", "--porcelain"])
+            .map(|s| s.lines().filter(|l| !l.trim().is_empty()).count())
+            .unwrap_or(0),
+    }
 }
 
 /// Check the GitHub CLI. Only needed for the new-repo flow.
