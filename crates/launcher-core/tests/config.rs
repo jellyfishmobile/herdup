@@ -34,13 +34,82 @@ const HERDR_MANIFEST_IDS: [&str; 18] = [
     "qodercli",
 ];
 
+/// Agent kinds accepted by `herdr agent start --kind` on 0.8.2, from the
+/// installed binary's own help output. A kind outside this list is rejected at
+/// runtime, so shipping one would break launches for that CLI.
+const HERDR_AGENT_KINDS: [&str; 23] = [
+    "pi",
+    "claude",
+    "codex",
+    "gemini",
+    "cursor",
+    "devin",
+    "agy",
+    "cline",
+    "omp",
+    "mastracode",
+    "opencode",
+    "copilot",
+    "kimi",
+    "kiro",
+    "droid",
+    "amp",
+    "grok",
+    "hermes",
+    "kilo",
+    "qodercli",
+    "qwen",
+    "maki",
+    "muse",
+];
+
 #[test]
 fn the_builtin_registry_covers_every_herdr_manifest_id() {
+    // A superset: the registry also carries agent kinds that have no detection
+    // manifest, so herdr's sidebar may not label them but `agent start` works.
     let reg = Registry::builtin();
-    assert_eq!(reg.len(), HERDR_MANIFEST_IDS.len());
     for id in HERDR_MANIFEST_IDS {
         assert!(reg.contains(id), "registry is missing herdr agent '{id}'");
     }
+    assert_eq!(reg.len(), 24);
+}
+
+#[test]
+fn every_declared_kind_is_one_herdr_actually_accepts() {
+    // `agent start --kind` rejects anything outside its list, so an invented
+    // kind would fail every launch for that CLI.
+    let reg = Registry::builtin();
+    for entry in reg.iter() {
+        if let Some(kind) = &entry.kind {
+            assert!(
+                HERDR_AGENT_KINDS.contains(&kind.as_str()),
+                "{} declares kind '{kind}', which herdr does not accept",
+                entry.id
+            );
+        }
+    }
+}
+
+#[test]
+fn every_herdr_agent_kind_is_reachable_from_some_registry_entry() {
+    // Otherwise a CLI herdr can drive would be unavailable in herdup for no
+    // reason. `agy` in particular was missing until the agent API was adopted.
+    let reg = Registry::builtin();
+    for kind in HERDR_AGENT_KINDS {
+        assert!(
+            reg.iter().any(|e| e.kind.as_deref() == Some(kind)),
+            "no registry entry offers herdr kind '{kind}'"
+        );
+    }
+}
+
+#[test]
+fn a_cli_herdr_cannot_manage_as_an_agent_has_no_kind() {
+    // antigravity has a detection manifest but is not an `agent start` kind.
+    let reg = Registry::builtin();
+    let entry = reg.get("antigravity").expect("present");
+    assert!(entry.kind.is_none());
+    assert!(!entry.has_agent_kind());
 }
 
 #[test]
@@ -256,7 +325,7 @@ fn a_user_can_add_a_cli_the_builtins_do_not_know() {
     assert_eq!(added.display_name, "My Tool");
     // An untested CLI defaults to the cautious tier.
     assert_eq!(added.briefing_trust, BriefingTrust::Manual);
-    assert_eq!(reg.len(), 19);
+    assert_eq!(reg.len(), 25);
 }
 
 #[test]
@@ -532,7 +601,7 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 fn a_missing_user_config_directory_falls_back_to_builtins() {
     // The normal first-run case must not be an error.
     let reg = launcher_core::config::load_registry_from(None).expect("loads");
-    assert_eq!(reg.len(), 18);
+    assert_eq!(reg.len(), 24);
     let t = launcher_core::config::load_templates_from(None, &reg).expect("loads");
     assert_eq!(t.len(), 4);
 }
@@ -541,7 +610,7 @@ fn a_missing_user_config_directory_falls_back_to_builtins() {
 fn an_empty_config_directory_falls_back_to_builtins() {
     let dir = temp_dir("empty");
     let reg = launcher_core::config::load_registry_from(Some(&dir)).expect("loads");
-    assert_eq!(reg.len(), 18);
+    assert_eq!(reg.len(), 24);
 }
 
 #[test]
@@ -560,7 +629,7 @@ fn user_files_on_disk_are_merged_and_validated_together() {
     .unwrap();
 
     let reg = launcher_core::config::load_registry_from(Some(&dir)).expect("registry loads");
-    assert_eq!(reg.len(), 19);
+    assert_eq!(reg.len(), 25);
 
     // The user's template names the user's CLI: validation must see both.
     let t = launcher_core::config::load_templates_from(Some(&dir), &reg).expect("templates load");

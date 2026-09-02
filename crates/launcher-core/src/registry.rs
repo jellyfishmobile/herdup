@@ -65,11 +65,25 @@ pub struct CliEntry {
     /// found four CLIs installed in three different shapes on one machine, so a
     /// hardcoded filename (`claude.cmd`) is wrong.
     pub binary: String,
+    /// herdr's agent kind for `agent start --kind`, when it has one.
+    ///
+    /// `None` means herdr does not recognise this CLI as an agent, so herdup
+    /// falls back to raw pane commands and can never auto-brief it — herdr's
+    /// `agent_blocked` guard is unavailable, and that guard is half the reason
+    /// auto-briefing is safe at all.
+    pub kind: Option<String>,
     pub install_hint: InstallHint,
     pub docs_url: Option<String>,
     /// Empty string means "no flags". Only populated where verified.
     pub flag_presets: Vec<String>,
     pub briefing_trust: BriefingTrust,
+}
+
+impl CliEntry {
+    /// Whether herdup can drive this CLI through herdr's validated agent API.
+    pub fn has_agent_kind(&self) -> bool {
+        self.kind.is_some()
+    }
 }
 
 /// A complete entry, as the built-in file must supply it.
@@ -78,6 +92,8 @@ pub struct CliEntry {
 struct FullEntry {
     display_name: String,
     binary: String,
+    #[serde(default)]
+    kind: Option<String>,
     #[serde(default)]
     install_hint: InstallHint,
     #[serde(default)]
@@ -95,6 +111,7 @@ struct FullEntry {
 struct PartialEntry {
     display_name: Option<String>,
     binary: Option<String>,
+    kind: Option<String>,
     install_hint: Option<InstallHint>,
     docs_url: Option<String>,
     flag_presets: Option<Vec<String>>,
@@ -129,6 +146,7 @@ impl Registry {
                             id,
                             display_name: e.display_name,
                             binary: e.binary,
+                            kind: e.kind,
                             install_hint: e.install_hint,
                             docs_url: e.docs_url,
                             flag_presets: e.flag_presets,
@@ -161,6 +179,9 @@ impl Registry {
                     if let Some(v) = patch.binary {
                         existing.binary = v;
                     }
+                    if patch.kind.is_some() {
+                        existing.kind = patch.kind.clone();
+                    }
                     if let Some(v) = patch.install_hint {
                         existing.install_hint = v;
                     }
@@ -188,6 +209,7 @@ impl Registry {
                             id,
                             display_name,
                             binary,
+                            kind: patch.kind,
                             install_hint: patch.install_hint.unwrap_or_default(),
                             docs_url: patch.docs_url,
                             flag_presets: patch.flag_presets.unwrap_or_else(|| vec![String::new()]),

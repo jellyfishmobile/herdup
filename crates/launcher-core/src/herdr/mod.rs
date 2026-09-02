@@ -14,15 +14,15 @@ pub mod types;
 
 pub use error::{HerdrError, Result};
 pub use types::{
-    AgentStatus, Pane, ReadSource, SplitDirection, Tab, TabCreated, Version, WaitOutcome,
-    Workspace, WorkspaceCreated,
+    AgentInfo, AgentStatus, Pane, ReadSource, SplitDirection, Tab, TabCreated, Version,
+    WaitOutcome, Workspace, WorkspaceCreated,
 };
 
 use serde::de::DeserializeOwned;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use types::{PaneInfo, PaneList, WorkspaceList};
+use types::{AgentEnvelope, PaneInfo, PaneList, WorkspaceList};
 
 /// Minimum herdr this design supports.
 ///
@@ -262,6 +262,89 @@ impl HerdrCli {
         self.run_unit("pane close", &args(["pane", "close", pane_id]))
     }
 
+    // ---- agents --------------------------------------------------------
+    //
+    // herdr 0.8.2's agent surface. Preferred over the raw pane commands
+    // wherever a CLI has a herdr `kind`, because herdr validates agent identity
+    // and readiness itself:
+    //   * `agent start` returns only once the agent is ready for input
+    //   * `agent prompt` refuses to type into an agent at a dialog, *before*
+    //     writing any bytes
+    // Both are stronger than inferring readiness from a separate status read.
+
+    /// Start an agent in an existing shell pane and wait for it to be ready.
+    ///
+    /// Returns [`HerdrError::AgentNotReady`] if the agent blocks during startup
+    /// — a login or first-run prompt. That is not a failure: the name stays
+    /// usable for reading the pane and answering it.
+    ///
+    /// `agent_args` are passed through to the agent after `--`.
+    pub fn agent_start(
+        &self,
+        name: &str,
+        kind: &str,
+        pane_id: &str,
+        timeout_ms: u64,
+        agent_args: &[String],
+    ) -> Result<AgentInfo> {
+        let mut a = args(["agent", "start", name, "--kind", kind, "--pane", pane_id]);
+        a.push("--timeout".into());
+        a.push(timeout_ms.to_string());
+        if !agent_args.is_empty() {
+            a.push("--".into());
+            a.extend(agent_args.iter().cloned());
+        }
+        let env: AgentEnvelope = self.run_json_agent("agent start", name, &a)?;
+        Ok(env.agent)
+    }
+
+    /// Send a prompt to a running agent.
+    ///
+    /// With `wait`, herdr blocks until the agent reaches a settled state.
+    /// Returns [`HerdrError::AgentBlocked`] — **without having sent anything** —
+    /// if the agent is sitting at an approval or question dialog.
+    pub fn agent_prompt(
+        &self,
+        target: &str,
+        text: &str,
+        wait: bool,
+        timeout_ms: u64,
+    ) -> Result<AgentInfo> {
+        let mut a = args(["agent", "prompt", target, text]);
+        if wait {
+            a.push("--wait".into());
+        }
+        a.push("--timeout".into());
+        a.push(timeout_ms.to_string());
+        let env: AgentEnvelope = self.run_json_agent("agent prompt", target, &a)?;
+        Ok(env.agent)
+    }
+
+    pub fn agent_get(&self, target: &str) -> Result<AgentInfo> {
+        let env: AgentEnvelope =
+            self.run_json_agent("agent get", target, &args(["agent", "get", target]))?;
+        Ok(env.agent)
+    }
+
+    pub fn agent_read(&self, target: &str, source: ReadSource, lines: u32) -> Result<String> {
+        let a = args([
+            "agent",
+            "read",
+            target,
+            "--source",
+            source.as_str(),
+            "--lines",
+            &lines.to_string(),
+        ]);
+        self.run_text("agent read", &a)
+    }
+
+    pub fn agent_send_keys(&self, target: &str, keys: &[&str]) -> Result<()> {
+        let mut a = args(["agent", "send-keys", target]);
+        a.extend(keys.iter().map(|k| k.to_string()));
+        self.run_unit("agent send-keys", &a)
+    }
+
     // ---- waiting -------------------------------------------------------
 
     /// Block until a pane reports `status`, or the timeout elapses.
@@ -399,6 +482,15 @@ impl HerdrCli {
     /// silently degrades every API error to a generic command failure — which
     /// is exactly how `server_running()` once reported a dead server as alive.
     fn envelope(&self, context: &str, raw: &Raw) -> Result<Option<serde_json::Value>> {
+        self.envelope_for(context, None, raw)
+    }
+
+    fn envelope_for(
+        &self,
+        context: &str,
+        agent: Option<&str>,
+        raw: &Raw,
+    ) -> Result<Option<serde_json::Value>> {
         for text in [raw.stdout.trim(), raw.stderr.trim()] {
             if text.is_empty() {
                 continue;
@@ -415,7 +507,7 @@ impl HerdrCli {
                         source,
                         raw: text.to_string(),
                     })?;
-                return Err(HerdrError::from_api(api));
+                return Err(HerdrError::from_api_for(api, agent));
             }
             if let Some(result) = value.get("result") {
                 return Ok(Some(result.clone()));
@@ -427,6 +519,25 @@ impl HerdrCli {
     fn run_json<T: DeserializeOwned>(&self, context: &str, args: &[String]) -> Result<T> {
         let raw = self.invoke(args)?;
         match self.envelope(context, &raw)? {
+            Some(result) => serde_json::from_value(result).map_err(|source| HerdrError::Parse {
+                context: context.to_string(),
+                source,
+                raw: raw.stdout.clone(),
+            }),
+            None => Err(self.command_failed(context, args, raw)),
+        }
+    }
+
+    /// Like [`Self::run_json`], but tags agent errors with the agent's name so
+    /// the caller knows which pane needs attention without parsing prose.
+    fn run_json_agent<T: DeserializeOwned>(
+        &self,
+        context: &str,
+        agent: &str,
+        args: &[String],
+    ) -> Result<T> {
+        let raw = self.invoke(args)?;
+        match self.envelope_for(context, Some(agent), &raw)? {
             Some(result) => serde_json::from_value(result).map_err(|source| HerdrError::Parse {
                 context: context.to_string(),
                 source,

@@ -22,8 +22,8 @@ fn render(step: &Step) -> String {
             ..
         } => format!("split {}->{} {}", from.0, creates.0, direction.as_str()),
         Step::RenamePane { pane, label } => format!("rename {} {label}", pane.0),
+        Step::StartAgent { pane, name, .. } => format!("start {} {}", pane.0, name),
         Step::RunCommand { pane, .. } => format!("run {}", pane.0),
-        Step::AwaitIdle { pane, .. } => format!("await {}", pane.0),
         Step::SendBriefing { pane, .. } => format!("brief {}", pane.0),
     }
 }
@@ -46,43 +46,127 @@ fn the_squad_plan_is_exactly_this_sequence() {
         steps_of("squad"),
         vec![
             "create-workspace",
-            // Create, rename and run every pane in template order.
+            // Create, rename and start every pane in template order. There is
+            // no separate readiness step: `agent start` returns only once herdr
+            // sees the agent ready for input.
             "rename 0 PM",
-            "run 0",
+            "start 0 pm",
             "split 0->1 right",
             "rename 1 Coder 1",
-            "run 1",
+            "start 1 coder-1",
             "split 1->2 down",
             "rename 2 Coder 2",
-            "run 2",
+            "start 2 coder-2",
             "split 0->3 down",
             "rename 3 QA",
-            "run 3",
+            "start 3 qa",
             // Then brief everyone but the coordinator...
-            "await 1",
             "brief 1",
-            "await 2",
             "brief 2",
-            "await 3",
             "brief 3",
             // ...and the coordinator last, once the roster is known.
-            "await 0",
             "brief 0",
         ]
     );
 }
 
 #[test]
+fn agent_names_are_herdr_legal_and_unique() {
+    // herdr requires [a-z][a-z0-9_-]{0,31} and uniqueness among live agents.
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let p = plan(
+        &LaunchRequest::new(project(), templates.get("full-team").unwrap()),
+        &reg,
+    )
+    .expect("plans");
+
+    let names: Vec<&str> = p
+        .panes
+        .iter()
+        .map(|x| x.agent_name.as_deref().expect("claude has an agent kind"))
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "pm",
+            "coder-1",
+            "coder-2",
+            "qa",
+            "buildmaster",
+            "researcher"
+        ]
+    );
+
+    for name in &names {
+        let mut chars = name.chars();
+        assert!(
+            chars.next().is_some_and(|c| c.is_ascii_lowercase()),
+            "{name} must start with a lowercase letter"
+        );
+        assert!(
+            name.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+            "{name} has an illegal character"
+        );
+        assert!(name.len() <= 32, "{name} is too long");
+    }
+
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), names.len(), "names must be unique");
+}
+
+#[test]
+fn a_cli_without_a_herdr_agent_kind_falls_back_and_is_never_auto_briefed() {
+    // antigravity is detected by herdr but is not an `agent start` kind, so
+    // there is no readiness signal and no `agent_blocked` guard.
+    let reg = Registry::builtin();
+    assert!(
+        reg.get("antigravity").unwrap().kind.is_none(),
+        "fixture assumption: antigravity has no agent kind"
+    );
+    let templates = Templates::builtin();
+    let p = plan(
+        &LaunchRequest::new(project(), templates.get("solo").unwrap())
+            .override_cli(0, "antigravity"),
+        &reg,
+    )
+    .expect("plans");
+
+    assert!(p.panes[0].agent_name.is_none());
+    assert_eq!(p.panes[0].gate, BriefingGate::RequiresHuman);
+    assert!(p.steps.iter().any(|s| matches!(s, Step::RunCommand { .. })));
+    assert!(!p.steps.iter().any(|s| matches!(s, Step::StartAgent { .. })));
+}
+
+#[test]
+fn template_flags_become_agent_args_after_the_separator() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let p = plan(
+        &LaunchRequest::new(project(), templates.get("solo").unwrap()),
+        &reg,
+    )
+    .expect("plans");
+
+    let args = p
+        .steps
+        .iter()
+        .find_map(|s| match s {
+            Step::StartAgent { args, .. } => Some(args.clone()),
+            _ => None,
+        })
+        .expect("solo starts an agent");
+    assert_eq!(args, vec!["--permission-mode", "bypassPermissions"]);
+}
+
+#[test]
 fn solo_has_no_split_and_no_coordinator_step_ordering_to_worry_about() {
     assert_eq!(
         steps_of("solo"),
-        vec![
-            "create-workspace",
-            "rename 0 Dev",
-            "run 0",
-            "await 0",
-            "brief 0",
-        ]
+        vec!["create-workspace", "rename 0 Dev", "start 0 dev", "brief 0",]
     );
 }
 
@@ -94,7 +178,7 @@ fn every_builtin_template_plans_without_error() {
         let p = plan(&LaunchRequest::new(project(), t), &reg)
             .unwrap_or_else(|e| panic!("template '{}' failed to plan: {e}", t.id));
         assert_eq!(p.panes.len(), t.panes.len());
-        // Every pane gets renamed and run; every pane gets awaited and briefed.
+        // Every pane gets renamed and started, and every pane gets briefed.
         let renames = p
             .steps
             .iter()
@@ -120,8 +204,8 @@ fn the_coordinator_pane_is_created_first_but_briefed_last() {
     // splits from, yet its briefing names the finished team.
     let steps = steps_of("full-team");
 
-    let first_run = steps.iter().position(|s| s.starts_with("run ")).unwrap();
-    assert_eq!(steps[first_run], "run 0", "coordinator runs first");
+    let first_start = steps.iter().position(|s| s.starts_with("start ")).unwrap();
+    assert_eq!(steps[first_start], "start 0 pm", "coordinator starts first");
 
     let last_brief = steps.iter().rposition(|s| s.starts_with("brief ")).unwrap();
     assert_eq!(steps[last_brief], "brief 0", "coordinator is briefed last");
@@ -170,12 +254,30 @@ fn the_coordinator_briefing_names_every_teammate_with_role_and_cli() {
         rendered.contains("Claude Code"),
         "briefing omits the CLI name"
     );
-    // It must tell the coordinator how to actually drive them, and to prefer
-    // role labels over remembered ids.
-    assert!(rendered.contains("herdr pane read"));
-    assert!(rendered.contains("herdr pane run"));
-    assert!(rendered.contains("herdr pane list"));
-    assert!(rendered.contains("ROLE LABEL"));
+    // Teammates are addressed by agent name, which herdr resolves to whatever
+    // pane the agent currently occupies.
+    for name in ["coder-1", "coder-2", "qa", "buildmaster", "researcher"] {
+        assert!(rendered.contains(name), "briefing omits agent name {name}");
+    }
+    assert!(rendered.contains("AGENT NAME"));
+
+    // Every command it names must exist on herdr 0.8.2. An earlier version of
+    // this briefing told the coordinator to run `herdr wait agent-status`,
+    // which is not a command — the same mistake the executor was making.
+    for command in [
+        "herdr agent read",
+        "herdr agent prompt",
+        "herdr agent get",
+        "herdr agent list",
+    ] {
+        assert!(rendered.contains(command), "briefing omits {command}");
+    }
+    assert!(
+        !rendered.contains("wait agent-status"),
+        "briefing names a command herdr does not have"
+    );
+    // And it must tell the coordinator what to do when herdr refuses.
+    assert!(rendered.contains("agent_blocked"));
 }
 
 #[test]
@@ -508,8 +610,8 @@ fn every_split_references_a_pane_created_earlier() {
                     created.push(*creates);
                 }
                 Step::RenamePane { pane, .. }
+                | Step::StartAgent { pane, .. }
                 | Step::RunCommand { pane, .. }
-                | Step::AwaitIdle { pane, .. }
                 | Step::SendBriefing { pane, .. } => {
                     assert!(
                         created.contains(pane),

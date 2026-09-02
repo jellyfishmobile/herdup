@@ -311,8 +311,26 @@ Split into `blocking_issues()` (the user must act) and `auto_resolvable_issues()
 **Tests** — command construction per OS and for a path with spaces. Actually
 opening a terminal is verified manually.
 
-**Exit — the plan's first true milestone.** A full team launches from the command
-line on both OSes, with no GUI in existence. Everything after this is presentation.
+**Exit — COMPLETE on Windows 2026-09-02; macOS still unverified.**
+
+- [x] **A full six-agent team launched end to end from the command line, with no
+      GUI in existence** — 75.5 s, exit 0, all six briefed, coordinator briefed
+      last with a roster naming every teammate's agent name and pane.
+- [x] Terminal handoff: argv built with no shell on either platform; 10 tests
+      cover both shapes from either host. **Actually opening a terminal is still
+      the manual check**, on both OSes.
+- [x] 131 tests, clippy `-D warnings` and `fmt --check` clean.
+- [ ] macOS: nothing in this phase has run on a Mac.
+
+**This phase forced the agent-API rework** — see
+[`docs/notes/2026-09-02-agent-api-discovery.md`](../../notes/2026-09-02-agent-api-discovery.md).
+`wait agent-status` does not exist on herdr 0.8.2; the executor had been calling
+it since Phase 4 and reading exit 2 as a timeout. The design now uses
+`agent start` and `agent prompt`, so herdr enforces the no-typing-into-a-dialog
+property alongside herdup's own registry tier.
+
+**Method correction for later phases:** `cargo run` holds the process tree and
+makes a finished launch look like a hang. Test with the built binary.
 
 ---
 

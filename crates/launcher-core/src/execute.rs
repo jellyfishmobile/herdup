@@ -5,9 +5,21 @@
 //! what happened. The one judgement it does make is the safety-critical one —
 //! whether a pane is genuinely ready to be typed into.
 
-use crate::herdr::types::{AgentStatus, ReadSource, WaitOutcome};
+use crate::herdr::types::ReadSource;
 use crate::herdr::{HerdrCli, HerdrError};
 use crate::plan::{BriefingGate, LaunchPlan, PaneRef, Step};
+
+/// How long herdr may wait for an agent to react to a briefing.
+///
+/// Generous: a coordinator briefing names the whole team and the agent may
+/// start working immediately. herdr returns as soon as it observes a settled
+/// state, so this is a ceiling, not a delay.
+const BRIEFING_TIMEOUT_MS: u64 = 120_000;
+
+/// How many times to retry `agent start` while a new pane's shell settles.
+/// Ten attempts at 400 ms covers ~4 s, comfortably more than observed.
+const SHELL_READY_ATTEMPTS: u32 = 10;
+const SHELL_READY_PAUSE_MS: u64 = 400;
 
 /// Why a pane will not be briefed automatically.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,6 +71,9 @@ pub struct LaunchedPane {
     pub cli_display: String,
     /// `None` until the pane exists.
     pub pane_id: Option<String>,
+    /// herdr agent name, once started. The durable handle for `agent read`,
+    /// `agent send-keys` and releasing a held briefing.
+    pub agent_name: Option<String>,
     pub state: PaneState,
     /// The briefing that was withheld, ready for a human to release.
     pub pending_briefing: Option<String>,
@@ -168,6 +183,7 @@ impl<'a> Executor<'a> {
                 role: p.role.clone(),
                 cli_display: p.cli_display.clone(),
                 pane_id: None,
+                agent_name: None,
                 state: PaneState::NotCreated,
                 pending_briefing: None,
                 screen: None,
@@ -222,7 +238,11 @@ impl<'a> Executor<'a> {
         let (Some(id), Some(text)) = (pane.pane_id.clone(), pane.pending_briefing.clone()) else {
             return Ok(());
         };
-        self.type_briefing(&id, &text)?;
+        // Prefer the agent surface so herdr's guard still applies: if the human
+        // has not actually cleared the dialog, this refuses again rather than
+        // typing the briefing into it.
+        let target = pane.agent_name.clone().unwrap_or(id);
+        self.send_briefing(&target, &text)?;
         pane.pending_briefing = None;
         pane.state = PaneState::Briefed;
         Ok(())
@@ -277,42 +297,58 @@ impl<'a> Executor<'a> {
                 self.cli.pane_rename(&id, label)?;
             }
 
+            Step::StartAgent {
+                pane,
+                name,
+                kind,
+                args,
+                timeout_ms,
+            } => {
+                let id = resolve(ids, *pane)?;
+                // `agent start` both launches and waits: it returns only once
+                // herdr sees the agent ready for input, so there is no window
+                // between "looks ready" and "typed into".
+                match self.start_agent_with_retry(name, kind, &id, *timeout_ms, args) {
+                    Ok(info) => {
+                        panes[pane.0].agent_name = Some(name.clone());
+                        if info.interactive_ready {
+                            panes[pane.0].state = PaneState::Ready;
+                            on_event(Event::PaneReady {
+                                pane: *pane,
+                                role: panes[pane.0].role.clone(),
+                            });
+                        } else {
+                            // herdr returned success without asserting
+                            // readiness; treat that as needing a human rather
+                            // than assuming.
+                            self.mark_attention(
+                                panes,
+                                *pane,
+                                AttentionReason::Timeout,
+                                &id,
+                                on_event,
+                            );
+                        }
+                    }
+                    // Blocked on a startup prompt — a login or a first-run
+                    // "trust this folder" dialog. Not a launch failure: the
+                    // agent exists, it just needs a human. The name stays valid
+                    // for reading and answering the pane.
+                    Err(e) if e.is_agent_waiting_on_human() => {
+                        panes[pane.0].agent_name = Some(name.clone());
+                        self.mark_attention(panes, *pane, AttentionReason::Blocked, &id, on_event);
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+
             Step::RunCommand { pane, command } => {
                 let id = resolve(ids, *pane)?;
                 self.cli.pane_run(&id, command)?;
-            }
-
-            Step::AwaitIdle { pane, timeout_ms } => {
-                let id = resolve(ids, *pane)?;
-                let outcome = self
-                    .cli
-                    .wait_agent_status(&id, AgentStatus::Idle, *timeout_ms)?;
-
-                // Trust the observed status over the wait's exit code: a wait can
-                // land while the pane is really sitting on a prompt.
-                let status = self.observe_status(&id);
-
-                let settled = outcome == WaitOutcome::Reached && status.is_settled();
-                if settled {
-                    panes[pane.0].state = PaneState::Ready;
-                    on_event(Event::PaneReady {
-                        pane: *pane,
-                        role: panes[pane.0].role.clone(),
-                    });
-                } else {
-                    let reason = if status == AgentStatus::Blocked {
-                        AttentionReason::Blocked
-                    } else {
-                        AttentionReason::Timeout
-                    };
-                    panes[pane.0].state = PaneState::NeedsAttention(reason);
-                    panes[pane.0].screen = self.capture_screen(&id);
-                    on_event(Event::PaneNeedsAttention {
-                        pane: *pane,
-                        role: panes[pane.0].role.clone(),
-                        reason,
-                    });
-                }
+                // No agent kind means no readiness signal at all, so this pane
+                // is never briefed automatically. Plan generation already gates
+                // it; this records why.
+                self.mark_attention(panes, *pane, AttentionReason::UnverifiedCli, &id, on_event);
             }
 
             Step::SendBriefing { pane, text, gate } => {
@@ -351,12 +387,32 @@ impl<'a> Executor<'a> {
                         });
                     }
                     None => {
-                        self.type_briefing(&id, &rendered)?;
-                        panes[pane.0].state = PaneState::Briefed;
-                        on_event(Event::Briefed {
-                            pane: *pane,
-                            role: panes[pane.0].role.clone(),
-                        });
+                        let target = panes[pane.0].agent_name.clone().unwrap_or(id.clone());
+                        match self.send_briefing(&target, &rendered) {
+                            Ok(()) => {
+                                panes[pane.0].state = PaneState::Briefed;
+                                on_event(Event::Briefed {
+                                    pane: *pane,
+                                    role: panes[pane.0].role.clone(),
+                                });
+                            }
+                            // herdr's own guard fired: the agent is at a dialog
+                            // and nothing was written. This is the outer gate
+                            // being wrong and the inner one catching it — record
+                            // it exactly as a withheld briefing.
+                            Err(e) if e.is_agent_waiting_on_human() => {
+                                panes[pane.0].state =
+                                    PaneState::NeedsAttention(AttentionReason::Blocked);
+                                panes[pane.0].pending_briefing = Some(rendered);
+                                panes[pane.0].screen = self.capture_screen(&id);
+                                on_event(Event::BriefingWithheld {
+                                    pane: *pane,
+                                    role: panes[pane.0].role.clone(),
+                                    reason: AttentionReason::Blocked,
+                                });
+                            }
+                            Err(e) => return Err(e),
+                        }
                     }
                 }
             }
@@ -364,37 +420,67 @@ impl<'a> Executor<'a> {
         Ok(())
     }
 
-    /// Read a pane's status, giving herdr's detection a moment to catch up.
+    /// `agent start`, retrying while the pane's shell is still coming up.
     ///
-    /// Observed live: a pane sitting on a trust prompt still reported `unknown`
-    /// at the instant its wait expired, and `blocked` a second later. Deciding
-    /// from the first read alone reports "did not reach its prompt in time" for
-    /// a pane that is plainly waiting on the user — the right *action*, but an
-    /// unhelpful explanation.
-    fn observe_status(&self, pane_id: &str) -> AgentStatus {
-        let mut last = AgentStatus::Unknown;
-        for attempt in 0..3 {
-            if attempt > 0 {
-                std::thread::sleep(std::time::Duration::from_millis(600));
-            }
-            match self.cli.pane_get(pane_id) {
-                Ok(pane) => {
-                    last = pane.agent_status;
-                    // Anything conclusive ends the loop; only Unknown is worth
-                    // waiting on.
-                    if last != AgentStatus::Unknown {
-                        return last;
-                    }
+    /// herdr requires an *available* shell pane — at its prompt, nothing in the
+    /// foreground. A pane created moments earlier often is not there yet, and
+    /// loses the race non-deterministically: the same launch succeeded once and
+    /// failed with `agent_pane_busy` the next time. Retrying briefly is the fix;
+    /// every other error returns immediately.
+    fn start_agent_with_retry(
+        &self,
+        name: &str,
+        kind: &str,
+        pane_id: &str,
+        timeout_ms: u64,
+        args: &[String],
+    ) -> Result<crate::herdr::AgentInfo, HerdrError> {
+        let mut attempt = 0;
+        loop {
+            match self.cli.agent_start(name, kind, pane_id, timeout_ms, args) {
+                Err(e) if e.is_transient() && attempt < SHELL_READY_ATTEMPTS => {
+                    attempt += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(SHELL_READY_PAUSE_MS));
                 }
-                Err(_) => return last,
+                other => return other,
             }
         }
-        last
     }
 
-    fn type_briefing(&self, pane_id: &str, text: &str) -> Result<(), HerdrError> {
-        self.cli.pane_send_text(pane_id, text)?;
-        self.cli.pane_send_keys(pane_id, &["Enter"])
+    fn mark_attention(
+        &self,
+        panes: &mut [LaunchedPane],
+        pane: PaneRef,
+        reason: AttentionReason,
+        pane_id: &str,
+        on_event: &mut dyn FnMut(Event),
+    ) {
+        panes[pane.0].state = PaneState::NeedsAttention(reason);
+        if panes[pane.0].screen.is_none() {
+            panes[pane.0].screen = self.capture_screen(pane_id);
+        }
+        on_event(Event::PaneNeedsAttention {
+            pane,
+            role: panes[pane.0].role.clone(),
+            reason,
+        });
+    }
+
+    /// Deliver a briefing.
+    ///
+    /// Through herdr's agent surface when we have an agent name, so herdr's own
+    /// `agent_blocked` check applies **before any bytes are written**. Falling
+    /// back to raw pane input only happens for CLIs herdr does not manage, and
+    /// those are never auto-briefed in the first place.
+    fn send_briefing(&self, target: &str, text: &str) -> Result<(), HerdrError> {
+        if target.contains(':') {
+            // A pane id, not an agent name: no agent surface available.
+            self.cli.pane_send_text(target, text)?;
+            return self.cli.pane_send_keys(target, &["Enter"]);
+        }
+        self.cli
+            .agent_prompt(target, text, true, BRIEFING_TIMEOUT_MS)
+            .map(|_| ())
     }
 
     /// Best-effort: a failure to read the screen must not fail the launch.

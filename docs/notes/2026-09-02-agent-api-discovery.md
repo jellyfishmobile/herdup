@@ -99,7 +99,51 @@ duplication.
 
 - [x] `CliSyntax` error so exit 2 can never hide again; regression tests added.
 - [x] Capture `herdr --skill` output into this directory as the authority.
-- [ ] **Decide between option 1 and 2 before continuing Phase 6.**
-- [ ] Re-baseline the spec against 0.8.2 rather than 0.7.0 source.
+- [x] **Option 1 chosen and implemented** (2026-09-02). See below.
+- [ ] Re-baseline the rest of the spec against 0.8.2 rather than 0.7.0 source.
 - [ ] Amend the plan's Phase 0 to require `herdr --skill` first, and to fail the
       phase if any command it lists was not actually executed.
+
+## Outcome
+
+Adopted. Real JSON was captured first this time
+(`tests/fixtures/herdr/agent_*.json`) rather than coding against prose.
+
+What the captures added beyond the docs:
+
+- `agent get` returns **`interactive_ready`**, an explicit boolean. Stronger than
+  inferring readiness from `agent_status`, and now what gates every keystroke.
+- `agent start` returned `agent_not_ready` in **4.1 s** against a real trust
+  prompt — it detects the block immediately rather than waiting out its timeout.
+- A **new failure mode the docs do not mention**: `agent_pane_busy`, *"pane w1:p1
+  is not an available shell"*. A pane created moments earlier is not always at
+  its prompt. This is a genuine race — the same launch succeeded once and failed
+  the next time. Handled with a bounded retry (10 × 400 ms).
+
+Two further corrections the rework forced:
+
+- The **coordinator briefing itself named `herdr wait agent-status`** — the same
+  non-existent command, about to be handed to every coordinator as an
+  instruction. It now names only verified commands, addresses teammates by agent
+  name, and tells the coordinator what to do when herdr answers `agent_blocked`.
+  A test asserts the briefing contains no command herdr lacks.
+- The registry gained `kind`, and with it six agent kinds herdup could not
+  previously launch at all: **`agy`**, `omp`, `mastracode`, `qwen`, `maki`,
+  `muse`. Tests pin every declared kind to herdr's list and assert every kind
+  herdr accepts is reachable.
+
+`antigravity` has a detection manifest but is not an `agent start` kind, so it
+falls back to raw pane commands — and therefore can never be auto-briefed, since
+herdr's `agent_blocked` guard is unavailable for it.
+
+**Verified end to end 2026-09-02:** a full six-agent team launched in 75.5 s,
+exit 0, all six briefed, coordinator briefed last with a roster naming every
+teammate's agent name and pane.
+
+## Method note: `cargo run` hides the exit
+
+Running a launch through `cargo run` appeared to hang for ten minutes. The built
+binary run directly exits in well under a second. The hang is in `cargo run`
+holding the process tree, not in herdup — an earlier "fix" to detach the spawned
+server was aimed at the wrong target. **Test launches with
+`target/debug/launcher-cli.exe`, not `cargo run`.**

@@ -33,6 +33,32 @@ pub enum HerdrError {
     #[error("herdr client/server protocol mismatch: {message}")]
     ProtocolMismatch { message: String },
 
+    /// `agent start` found the agent blocked on a startup prompt — typically a
+    /// login or a first-run "trust this folder" dialog. Not a failure: the name
+    /// stays usable for `agent read` and `agent send-keys`.
+    #[error("agent '{name}' is blocked during startup: {message}")]
+    AgentNotReady { name: String, message: String },
+
+    /// `agent start` found the pane occupied — usually because the shell in a
+    /// just-created pane has not reached its prompt yet.
+    ///
+    /// A race, not a fault: retry briefly. herdr requires an *available* shell
+    /// pane, meaning the shell is in the foreground with no command running.
+    #[error("pane {pane} is not an available shell yet: {message}")]
+    AgentPaneBusy { pane: String, message: String },
+
+    /// `agent prompt` refused to type into an agent sitting at an approval or
+    /// question dialog — **before writing any bytes**.
+    ///
+    /// This is herdr enforcing the property herdup exists to guarantee. Treat it
+    /// as a withheld briefing, never as an error to retry through.
+    #[error("agent '{name}' is at a dialog and will not be prompted: {message}")]
+    AgentBlocked { name: String, message: String },
+
+    /// A prompt produced no observed lifecycle change within herdr's window.
+    #[error("agent '{name}' did not react to the prompt: {message}")]
+    AgentPromptStalled { name: String, message: String },
+
     #[error("herdr returned an error ({code}): {message}")]
     Api { code: String, message: String },
 
@@ -71,12 +97,33 @@ pub enum HerdrError {
 
 impl HerdrError {
     /// Map a herdr API error payload onto the typed variants.
-    pub(crate) fn from_api(err: ApiError) -> Self {
+    ///
+    /// `context` is the agent name when the call targeted one, so the agent
+    /// errors can name it — herdr's message does too, but the caller should not
+    /// have to parse prose to find out which pane needs attention.
+    pub(crate) fn from_api_for(err: ApiError, context: Option<&str>) -> Self {
+        let name = || context.unwrap_or("unknown").to_string();
         match err.code.as_str() {
             "server_not_running" => HerdrError::ServerUnavailable {
                 message: err.message,
             },
             "protocol_mismatch" => HerdrError::ProtocolMismatch {
+                message: err.message,
+            },
+            "agent_not_ready" => HerdrError::AgentNotReady {
+                name: name(),
+                message: err.message,
+            },
+            "agent_blocked" => HerdrError::AgentBlocked {
+                name: name(),
+                message: err.message,
+            },
+            "agent_prompt_stalled" => HerdrError::AgentPromptStalled {
+                name: name(),
+                message: err.message,
+            },
+            "agent_pane_busy" => HerdrError::AgentPaneBusy {
+                pane: name(),
                 message: err.message,
             },
             _ => HerdrError::Api {
@@ -86,9 +133,25 @@ impl HerdrError {
         }
     }
 
+    /// True when the agent exists but is waiting on a human.
+    ///
+    /// Both cases mean the same thing to the launcher: leave it alone, show the
+    /// pane, and hold the briefing.
+    pub fn is_agent_waiting_on_human(&self) -> bool {
+        matches!(
+            self,
+            HerdrError::AgentNotReady { .. } | HerdrError::AgentBlocked { .. }
+        )
+    }
+
     /// Whether starting a server and retrying is worth attempting.
     pub fn is_recoverable_by_starting_server(&self) -> bool {
         matches!(self, HerdrError::ServerUnavailable { .. })
+    }
+
+    /// A transient race worth retrying after a short pause.
+    pub fn is_transient(&self) -> bool {
+        matches!(self, HerdrError::AgentPaneBusy { .. })
     }
 }
 

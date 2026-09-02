@@ -97,6 +97,36 @@ fn unknown_status() -> AgentStatus {
     AgentStatus::Unknown
 }
 
+/// A herdr-managed agent, as returned by `agent get` / `wait` / `prompt`.
+///
+/// Shape captured from herdr 0.8.2 (`tests/fixtures/herdr/agent_*.json`).
+#[derive(Debug, Clone, Deserialize)]
+pub struct AgentInfo {
+    /// The unique name we gave it at `agent start`.
+    pub name: String,
+    /// The kind herdr detected, e.g. `claude`.
+    #[serde(default)]
+    pub agent: Option<String>,
+    pub pane_id: String,
+    #[serde(default = "unknown_status")]
+    pub agent_status: AgentStatus,
+    /// herdr's own explicit readiness signal — stronger than inferring from
+    /// `agent_status`, and the thing to gate keystrokes on.
+    #[serde(default)]
+    pub interactive_ready: bool,
+    /// True while the agent is still coming up, including when it is blocked
+    /// on a startup prompt.
+    #[serde(default)]
+    pub launch_pending: bool,
+    #[serde(default)]
+    pub cwd: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct AgentEnvelope {
+    pub agent: AgentInfo,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tab {
     pub tab_id: String,

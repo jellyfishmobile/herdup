@@ -73,6 +73,11 @@ pub struct RosterEntry {
     pub role: String,
     pub cli_display: String,
     pub pane: PaneRef,
+    /// herdr agent name, when the teammate is managed as an agent.
+    ///
+    /// A better handle than a pane id: herdr resolves it to whichever pane the
+    /// agent currently occupies, and agent commands accept it directly.
+    pub agent_name: Option<String>,
 }
 
 /// Briefing content. The coordinator's cannot be fully rendered at plan time
@@ -95,27 +100,39 @@ impl BriefingText {
             BriefingText::Literal(text) => text.clone(),
             BriefingText::Coordinator { preamble, roster } => {
                 let mut out = preamble.clone();
-                out.push_str(" Your team, by role — ");
+                out.push_str(" Your team — ");
                 let members: Vec<String> = roster
                     .iter()
-                    .map(|r| {
-                        format!(
+                    .map(|r| match &r.agent_name {
+                        Some(name) => format!(
+                            "{} is agent '{}' running {} (pane {})",
+                            r.role,
+                            name,
+                            r.cli_display,
+                            resolve(r.pane)
+                        ),
+                        None => format!(
                             "{} in pane {} running {}",
                             r.role,
                             resolve(r.pane),
                             r.cli_display
-                        )
+                        ),
                     })
                     .collect();
                 out.push_str(&members.join("; "));
+                // Commands verified against herdr 0.8.2. Agent names are the
+                // handle to prefer: herdr resolves a name to whichever pane the
+                // agent currently occupies, so it survives layout changes that
+                // a remembered pane id would not.
                 out.push_str(
-                    ". Drive them with the herdr CLI: `herdr pane read <id> --source recent \
-                     --lines 60` to see what one is doing, `herdr pane run <id> \"<task>\"` to \
-                     give it work, and `herdr wait agent-status <id> --status idle \
-                     --timeout 600000` to wait for one to finish. Match teammates by their ROLE \
-                     LABEL rather than trusting a remembered pane id: re-read the current ids \
-                     with `herdr pane list` before acting, because a pane that is closed and \
-                     recreated gets a new id.",
+                    ". Drive them with the herdr CLI, addressing each teammate by its AGENT NAME: \
+                     `herdr agent read <name> --source recent-unwrapped --lines 120` to see what \
+                     one is doing, `herdr agent prompt <name> \"<task>\" --wait --timeout 600000` \
+                     to give it work and wait for it to settle, and `herdr agent get <name>` to \
+                     check its state. `herdr agent prompt` refuses to write to an agent sitting \
+                     at an approval dialog and returns agent_blocked instead: when that happens, \
+                     read the pane and ask the user rather than answering the dialog yourself. \
+                     Re-read the roster with `herdr agent list` if a name stops resolving.",
                 );
                 flatten(&out)
             }
@@ -141,17 +158,30 @@ pub enum Step {
         pane: PaneRef,
         label: String,
     },
-    /// The command line typed into the pane's shell.
+    /// Start an agent through herdr's agent API.
     ///
-    /// Unlike herdup's own argv handling, this string *is* shell-interpreted —
-    /// that is the point of it (spec §6.3).
+    /// This both launches and waits: `agent start` returns only once herdr sees
+    /// the agent ready for input, so there is no separate readiness step and no
+    /// window between "looks ready" and "typed into". If the agent blocks on a
+    /// startup prompt herdr says so immediately.
+    StartAgent {
+        pane: PaneRef,
+        /// Unique herdr agent name, derived from the role.
+        name: String,
+        /// herdr's agent kind.
+        kind: String,
+        /// Native agent arguments, passed after `--`.
+        args: Vec<String>,
+        timeout_ms: u64,
+    },
+    /// Fallback for CLIs herdr has no agent kind for.
+    ///
+    /// The string *is* shell-interpreted by the pane's shell — that is the point
+    /// of it (spec §6.3). There is no readiness signal on this path, so such a
+    /// pane is never auto-briefed.
     RunCommand {
         pane: PaneRef,
         command: String,
-    },
-    AwaitIdle {
-        pane: PaneRef,
-        timeout_ms: u64,
     },
     SendBriefing {
         pane: PaneRef,
@@ -170,6 +200,10 @@ pub struct PlannedPane {
     /// Base name; preflight resolves it to an absolute path.
     pub binary: String,
     pub command: String,
+    /// herdr agent kind, when this CLI has one.
+    pub kind: Option<String>,
+    /// Unique herdr agent name, when driven through the agent API.
+    pub agent_name: Option<String>,
     pub coordinator: bool,
     pub gate: BriefingGate,
     /// Flags the template specified that were **discarded** because this pane's
@@ -241,11 +275,28 @@ impl LaunchPlan {
                     name(*creates)
                 ),
                 Step::RenamePane { pane, label } => format!("rename {} to {label:?}", pane),
+                Step::StartAgent {
+                    pane,
+                    name: agent,
+                    kind,
+                    args,
+                    timeout_ms,
+                } => format!(
+                    "start agent '{agent}' (kind {kind}) in {}{} — waits up to {}s for readiness",
+                    name(*pane),
+                    if args.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" -- {}", args.join(" "))
+                    },
+                    timeout_ms / 1000
+                ),
                 Step::RunCommand { pane, command } => {
-                    format!("run in {}: {}", name(*pane), command)
-                }
-                Step::AwaitIdle { pane, timeout_ms } => {
-                    format!("await idle {} (up to {}s)", name(*pane), timeout_ms / 1000)
+                    format!(
+                        "run in {}: {} (no agent kind — never auto-briefed)",
+                        name(*pane),
+                        command
+                    )
                 }
                 Step::SendBriefing { pane, gate, .. } => format!(
                     "brief {} [{}]",
@@ -320,6 +371,7 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
     // Resolve every CLI before emitting anything, so a bad reference fails the
     // whole plan rather than producing a half-usable one.
     let mut panes = Vec::with_capacity(kept.len());
+    let mut used_names: Vec<String> = Vec::new();
     for (new_index, k) in kept.iter().enumerate() {
         let cli_id = request
             .cli_overrides
@@ -347,6 +399,22 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
             (flags_wanted, None)
         };
 
+        // Without a herdr agent kind there is no readiness signal and no
+        // `agent_blocked` guard, so such a pane can never be auto-briefed
+        // however trusted the CLI otherwise is.
+        let gate = if entry.has_agent_kind() {
+            BriefingGate::from(entry.briefing_trust)
+        } else {
+            BriefingGate::RequiresHuman
+        };
+
+        let agent_name = entry
+            .has_agent_kind()
+            .then(|| unique_agent_name(&k.spec.role, &used_names));
+        if let Some(name) = &agent_name {
+            used_names.push(name.clone());
+        }
+
         panes.push(PlannedPane {
             pane: PaneRef(new_index),
             role: k.spec.role.clone(),
@@ -354,8 +422,10 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
             cli_display: entry.display_name.clone(),
             binary: entry.binary.clone(),
             command: crate::template::command_line(&entry.binary, flags),
+            kind: entry.kind.clone(),
+            agent_name,
             coordinator: k.spec.coordinator,
-            gate: entry.briefing_trust.into(),
+            gate,
             dropped_flags,
         });
     }
@@ -391,10 +461,19 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
             pane,
             label: panes[index].role.clone(),
         });
-        steps.push(Step::RunCommand {
-            pane,
-            command: panes[index].command.clone(),
-        });
+        match (&panes[index].kind, &panes[index].agent_name) {
+            (Some(kind), Some(name)) => steps.push(Step::StartAgent {
+                pane,
+                name: name.clone(),
+                kind: kind.clone(),
+                args: split_args(&k.spec.flags),
+                timeout_ms: request.await_timeout_ms,
+            }),
+            _ => steps.push(Step::RunCommand {
+                pane,
+                command: panes[index].command.clone(),
+            }),
+        }
     }
 
     // Brief everyone except the coordinator...
@@ -403,10 +482,6 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
         if Some(index) == coordinator {
             continue;
         }
-        steps.push(Step::AwaitIdle {
-            pane: PaneRef(index),
-            timeout_ms: request.await_timeout_ms,
-        });
         steps.push(Step::SendBriefing {
             pane: PaneRef(index),
             text: BriefingText::Literal(k.spec.flattened_briefing()),
@@ -423,12 +498,9 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
                 role: p.role.clone(),
                 cli_display: p.cli_display.clone(),
                 pane: p.pane,
+                agent_name: p.agent_name.clone(),
             })
             .collect();
-        steps.push(Step::AwaitIdle {
-            pane: PaneRef(index),
-            timeout_ms: request.await_timeout_ms,
-        });
         steps.push(Step::SendBriefing {
             pane: PaneRef(index),
             text: BriefingText::Coordinator {
@@ -520,6 +592,57 @@ fn compact<'a>(template: &'a Template, skip: &BTreeSet<usize>) -> Result<Vec<Kep
         });
     }
     Ok(out)
+}
+
+/// Split a flag string into argv elements for `agent start ... -- <args>`.
+///
+/// Whitespace splitting is sufficient because registry flag presets are only
+/// ever shipped where verified, and none of the verified ones contain quoted
+/// arguments. A user who needs quoting can edit the command their template
+/// produces instead.
+fn split_args(flags: &str) -> Vec<String> {
+    flags.split_whitespace().map(str::to_string).collect()
+}
+
+/// A herdr agent name derived from a role.
+///
+/// herdr requires `[a-z][a-z0-9_-]{0,31}` and uniqueness among live agents, so
+/// "Coder 1" becomes `coder-1`.
+fn agent_name_for(role: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in role.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if !out.is_empty() && !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    let out = out.trim_end_matches('-').to_string();
+    // Must start with a letter.
+    let out = match out.chars().next() {
+        Some(c) if c.is_ascii_alphabetic() => out,
+        _ => format!("a{}{}", if out.is_empty() { "" } else { "-" }, out),
+    };
+    out.chars().take(32).collect()
+}
+
+/// `agent_name_for`, with a numeric suffix if that name is already taken.
+fn unique_agent_name(role: &str, used: &[String]) -> String {
+    let base = agent_name_for(role);
+    if !used.contains(&base) {
+        return base;
+    }
+    for n in 2..1000 {
+        let truncated: String = base.chars().take(28).collect();
+        let candidate = format!("{truncated}-{n}");
+        if !used.contains(&candidate) {
+            return candidate;
+        }
+    }
+    base
 }
 
 /// `<folder> — <template>`, e.g. `herdup — Squad`.
