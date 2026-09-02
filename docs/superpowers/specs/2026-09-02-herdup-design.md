@@ -80,8 +80,40 @@ We use that instead. It is maintained upstream, refreshes via
 | `done` | Finished work, unseen | Treat as ready |
 | `unknown` | Unrecognised output | Keep waiting, then surface |
 
-This removes the blind-typing hazard: a briefing can never be typed into a login
-screen, because a login screen is not `idle`.
+### 5.1 The guarantee is per-CLI, not universal
+
+**Revised 2026-09-02 after Phase 0 testing. The original form of this section was
+wrong and is corrected here** — see
+[ground truth §4](../../notes/2026-09-02-herdr-ground-truth.md).
+
+The table above holds only where herdr's detection manifest for that agent is
+good. It is not uniformly good. herdr's own README grades its agents, and lists
+*"detected but not fully tested: gemini cli, cline."*
+
+Measured on herdr 0.8.2:
+
+- **Claude Code** behaved exactly as the table promises: `blocked` on its
+  trust-this-folder prompt, `idle` once answered.
+- **Gemini CLI reported `idle` while a blocking trust modal was on screen.**
+  Sending the briefing as Stage 2 would have, the text was swallowed by the modal
+  and the trailing Enter selected *"1. Trust folder"* — silently granting a
+  permission that lets that folder's config execute code.
+
+So `idle` alone cannot gate a keystroke. Each registry entry therefore carries a
+`briefing_trust` tier:
+
+| Tier | Meaning | Behaviour |
+|---|---|---|
+| `verified` | We have reproduced the `blocked → idle` transition for this CLI ourselves | Auto-brief on `idle` |
+| `manual` | Everything else — the default | **Never auto-brief.** Show the pane's screen; require a human click on *Send briefing now* |
+
+Today exactly one CLI ships `verified`: `claude`. Promotion requires someone
+reproducing the transition and recording it — never assumption. This is the same
+rule as flag presets in §7.1: ship blank, fill in what is proven.
+
+The safety property, correctly stated: **a briefing is only ever sent
+automatically to a CLI whose blocked-detection we have tested. For every other
+CLI a human sees the pane before anything is typed into it.**
 
 ## 6. Architecture
 
@@ -133,7 +165,6 @@ enum Step {
     AwaitIdle       { pane: PaneRef, timeout_ms: u64 },
     SendBriefing    { pane: PaneRef, text: String },
     ClosePane       { pane: PaneRef },
-    ReReadPaneIds,
 }
 
 struct LaunchPlan { steps: Vec<Step> }
@@ -172,10 +203,11 @@ does not clobber edits and users only record their deltas.
 
 ```toml
 [claude]
-display_name = "Claude Code"
-binary       = { windows = "claude.cmd", unix = "claude" }
-install_hint = "npm i -g @anthropic-ai/claude-code"
-flag_presets = ["--permission-mode bypassPermissions", "--permission-mode acceptEdits", ""]
+display_name   = "Claude Code"
+binary         = "claude"          # base name only; resolved at preflight
+install_hint   = "npm i -g @anthropic-ai/claude-code"
+flag_presets   = ["--permission-mode bypassPermissions", "--permission-mode acceptEdits", ""]
+briefing_trust = "verified"        # see §5.1; everything else ships "manual"
 ```
 
 `id` (the table key) matches herdr's detection manifest `id` so that herdr's
@@ -186,8 +218,11 @@ Every other CLI ships `flag_presets = [""]` plus a free-text field in the UI. A
 blank field is honest; a confidently wrong `--dangerously-*` flag could silently
 disable someone's sandbox. Users fill theirs in once and it persists.
 
-The `windows`/`unix` binary split exists because most of these CLIs install as npm
-shims — `claude.cmd` on Windows, `claude` on macOS.
+**`binary` is a base name, never a filename.** Phase 0 found four installed CLIs
+in three different shapes on one machine: `claude.exe` in `~/.local/bin` (native),
+`gemini.ps1` in the npm prefix (shim), `kimi.exe` in its own tree. An earlier
+draft hardcoded `claude.cmd` for Windows and was simply wrong. Preflight resolves
+the base name via `where`/`which` and stores the absolute path it finds.
 
 ### 7.2 `templates.toml`
 
@@ -258,14 +293,25 @@ Missing CLI → the UI offers three remediations, per affected role:
 - switch that role to a different installed CLI
 - drop that pane from the launch
 
-### Stage 1 — Sign-in pass
+### Stage 1 — First-run pass
 
-Runs only for CLIs absent from `[verified]`. Skipped entirely when the cache is
-warm, which is the common case after first run.
+**Widened from "sign-in" after Phase 0.** Logins are not the only thing that
+blocks a fresh CLI. Both Claude Code and Gemini CLI show a *trust this folder*
+prompt the first time they run in an unfamiliar directory — which is the **normal**
+case for the "create a repo, launch a team into it" flow, not an edge case. Stage 1
+clears every first-run interstitial, of which login is one kind.
 
-Auth is per-CLI, not per-pane: three `claude` panes need one login.
+Runs for any CLI absent from `[verified]`, keyed by **CLI *and* project directory**
+— a CLI trusted in one repo is not trusted in the next. Skipped entirely when the
+cache is warm.
+
+Both concerns are per-CLI-per-project, not per-pane: three `claude` panes in one
+repo need one login and one trust answer. Phase 0 confirmed the trust decision
+persists — a second `claude` in the same folder went straight to `idle` in 4.7s.
 
 1. `herdr workspace create --cwd <project> --label "herdup setup" --no-focus`
+   — **in the target project directory**, so the trust prompt raised here is the
+   same one Stage 2 would otherwise hit.
 2. One pane per un-verified CLI, each running the **bare binary with no flags** —
    permission flags are irrelevant to logging in and could suppress the prompt.
 3. Open the terminal attached to this workspace. Some login flows need a real TTY;
@@ -277,10 +323,14 @@ Auth is per-CLI, not per-pane: three `claude` panes need one login.
    buttons. Reaching `idle` marks that CLI verified and writes `[verified]`.
 6. Cap the stage at 5 minutes, cancellable at any point.
 
-**Teardown, then re-read.** Close each setup pane (`herdr pane close`), close the
-setup workspace (`herdr workspace close`), and only then run `ReReadPaneIds`.
-herdr's docs are explicit that IDs compact when panes close, so Stage 2 must not
-hold any ID allocated before teardown.
+**Teardown.** Close each setup pane (`herdr pane close`), then the setup workspace
+(`herdr workspace close`).
+
+> **Obsolete constraint, removed.** An earlier draft ordered teardown before
+> Stage 2 because 0.7.0's docs warn that pane IDs compact when panes close. On
+> **0.8.2 they are monotonic** — Phase 0 closed `w1:p2`, re-split, and got `w1:p4`,
+> not a reused `w1:p2`. The `ReReadPaneIds` step and the ordering rule are dropped,
+> and **minimum supported herdr is pinned to 0.8.2** so the assumption holds.
 
 ### Stage 2 — Build the team
 
@@ -313,10 +363,19 @@ Most agent CLIs submit on newline, so a multi-line briefing would fire as severa
 truncated prompts. Templates may store readable multi-line text; the sender
 flattens it.
 
-If `wait agent-status` returns `blocked` or times out, the briefing is **withheld**.
-The pane stays, marked *needs attention*, with its recent output and a **Send
-briefing now** button. This is the same mechanism that protects against an expired
-token that the Stage 1 cache wrongly considered fresh.
+A briefing is sent automatically only when **both** hold:
+
+1. the pane reports `idle` (or `done`), and
+2. the CLI's `briefing_trust` is `verified` (§5.1).
+
+A `manual`-tier CLI is **never** auto-briefed even at `idle` — Phase 0 caught
+Gemini reporting `idle` behind a blocking modal, so for untested CLIs a human
+looks at the pane first.
+
+Otherwise — `blocked`, a timeout, or a `manual`-tier CLI — the briefing is
+**withheld**. The pane stays, marked *needs attention*, with its recent output
+and a **Send briefing now** button. This is the same mechanism that protects
+against an expired token the Stage 1 cache wrongly considered fresh.
 
 ### Stage 3 — Hand off
 
@@ -335,12 +394,14 @@ exists, and contains:
 
 - the roster: role name, pane id, CLI for each teammate
 - the herdr commands to drive them — `pane read`, `pane run`, `wait agent-status`
-- an explicit warning that pane IDs compact when panes close, and an instruction
-  to re-read them with `herdr pane list` and match on the **role label** rather
-  than trusting a remembered id
+- an instruction to match teammates on their **role label**, re-reading with
+  `herdr pane list` rather than trusting a remembered id
 
 Role labels are the durable handle, which is why `pane rename` runs on every pane
-before any briefing is sent.
+before any briefing is sent. On herdr 0.8.2 pane IDs are also stable (they do not
+compact — see Stage 1 teardown), so the earlier compaction warning has been
+dropped from the briefing text; matching on labels remains the instruction because
+a pane that is closed and recreated genuinely does get a new id.
 
 ## 10. Built-in templates
 
@@ -376,6 +437,9 @@ down. All of it is editable TOML — these are defaults, not constraints.
 | `gh` missing or logged out | Disable only the New Project flow, with the reason shown. Launching is unaffected. |
 | Pane `blocked` after launch | Withhold briefing, mark *needs attention*, surface output, offer manual send. |
 | `wait agent-status` timeout | Same as `blocked`. |
+| First-run *trust this folder* prompt | **Expected, not an error.** Normal for any CLI's first run in a new repo; Stage 1 clears it. Present as a step to complete, never as a failure. |
+| `manual`-tier CLI reaches `idle` | Withhold briefing anyway (§5.1); show the pane and require a human click. |
+| herdr older than 0.8.2 | Block at preflight with the version found. IDs compact below 0.8.x and the design assumes they do not. |
 | Any step fails mid-plan | **Stop, do not roll back.** A partial team is still useful and tearing it down destroys work. Report the failing step and pane; offer per-pane retry. |
 | Stage 1 cancelled | Tear down setup workspace, return to Stage 0. |
 
@@ -397,7 +461,7 @@ CI-testable rather than manual:
 
 - codex reports `blocked`, then `idle` after a simulated sign-in → briefing fires
 - a pane never leaves `working` → times out, briefing withheld, marked
-- setup teardown followed by `ReReadPaneIds` → Stage 2 uses post-compaction IDs
+- a `manual`-tier CLI reports `idle` → briefing is **not** sent (the Gemini case)
 - a mid-plan failure leaves earlier panes untouched
 
 **Manual smoke, per OS.** Real herdr, real terminal handoff, one full-team launch.
@@ -408,8 +472,9 @@ Terminal-opening and the live socket are the parts a fake cannot cover.
 | Risk | Mitigation |
 |---|---|
 | herdr's Windows support is preview-only beta | Detect the platform and surface herdr's own beta warning at first run. Windows is the riskier target and should be smoke-tested first, not last. |
-| `agent_status` is heuristic and can misread a CLI | Failure mode is a withheld briefing plus a visible button, never a wrong action. Manifests update via `herdr server update-agent-manifests`. |
-| Pane ID compaction | Teardown-then-re-read is enforced in the plan; coordinator briefed to match on role labels. |
+| `agent_status` is heuristic and can misread a CLI | **Confirmed real in Phase 0**, not hypothetical: Gemini reported `idle` behind a blocking modal. Contained by the `briefing_trust` tiering in §5.1 — only CLIs we have tested are auto-briefed. Manifests update via `herdr server update-agent-manifests`. |
+| Spec assumptions drift from the shipped herdr | The spec was written against 0.7.0 source; 0.8.2-preview ships, and Windows defaults to the preview channel. ID format and compaction behaviour both changed. Re-run the Phase 0 capture against any new minimum version before raising the pin. |
+| A pane closed and recreated gets a new id | Coordinator is briefed to match on role labels and re-read via `herdr pane list`. (Bulk compaction is not a concern on 0.8.2 — IDs are monotonic.) |
 | Unverifiable flags for 16 CLIs | Ship blank, let users fill and persist. Never guess a permission flag. |
 | herdr CLI surface changes | Confined to `herdr_cli`. Pin a minimum herdr version at preflight and fail loudly on an older one. |
 

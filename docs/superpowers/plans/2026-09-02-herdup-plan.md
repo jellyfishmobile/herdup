@@ -17,6 +17,21 @@ launcher. By the end of Phase 6 a full team can be launched with no UI at all,
 which means the Tauri layer in Phase 7 is a thin shell over proven logic rather
 than the place where logic and UI bugs get debugged together.
 
+**Never test against the default herdr session.** A developer's live session owns
+real panes, and `herdr server stop` exits every one of them. Every test and every
+manual check uses an isolated named session, which gets its own socket *and* state
+directory:
+
+```
+herdr --session herdup-test server
+herdr --session herdup-test <command>
+herdr session stop herdup-test && herdr session delete herdup-test
+```
+
+`HERDR_SOCKET_PATH` alone is **not** sufficient — Phase 0 found it redirects the
+socket while the server still reads the shared state directory, restoring a
+duplicate of the live session's panes.
+
 Sizes are relative (S / M / L), not calendar estimates.
 
 ---
@@ -42,18 +57,24 @@ preview-only beta. Everything downstream depends on what it actually does.
 **Deliverable** — `tests/fixtures/herdr/*.json` (real captured output) and
 `docs/notes/2026-09-02-herdr-ground-truth.md`.
 
-**Exit criteria**
+**Exit criteria — COMPLETE 2026-09-02.** Findings:
+[`docs/notes/2026-09-02-herdr-ground-truth.md`](../../notes/2026-09-02-herdr-ground-truth.md)
 
-- [ ] Every JSON path the spec names is confirmed present, or the spec is corrected.
-      Specifically: `result.pane.pane_id`, `result.workspace`, `result.tab`,
-      `result.root_pane`.
-- [ ] `agent_status` at a **login prompt** is recorded. The spec assumes `blocked`
-      or `unknown`. **If a logged-out CLI reports `idle`, §5 of the spec is wrong
-      and the briefing-safety guarantee collapses** — stop and revise before Phase 1.
-- [ ] Minimum supported herdr version chosen and written into the spec.
+- [x] Every JSON path the spec names is confirmed present. `result.workspace`,
+      `result.tab`, `result.root_pane`, `result.pane.pane_id` all exist.
+      ID *format* differs from the 0.7.0 docs (`w1` / `w1:t1` / `w1:p1`) — we parse,
+      never construct, so no impact.
+- [x] **The guarantee failed, and the spec has been corrected.** Not via a login
+      prompt but a *trust-this-folder* prompt: **Gemini CLI reported `idle` while a
+      blocking modal was on screen**, and a test briefing was swallowed by it —
+      the trailing Enter selecting "Trust folder" and granting a real permission.
+      Spec §5.1 now tiers the guarantee per-CLI (`verified` / `manual`).
+- [x] Minimum herdr pinned to **0.8.2**. Pane IDs are monotonic there, so the
+      compaction handling is dropped.
 
-> This phase exists to fail cheaply. It is the only phase whose outcome can
-> invalidate the design.
+> This phase existed to fail cheaply, and it did exactly that. The design's central
+> safety claim was disproven in an afternoon rather than in Phase 4 — and would
+> have shipped as a security bug, since the failure silently grants folder trust.
 
 ---
 
@@ -90,6 +111,9 @@ Pure data. No process spawning.
 - Schemas per spec §7.1 / §7.2; `serde` + `toml`.
 - Built-in `registry.toml` — 18 entries keyed to herdr's manifest ids. Verified
   `flag_presets` only for Claude Code; every other entry ships `[""]` (spec §7.1).
+- `briefing_trust` on every entry: `"verified"` for `claude` only, `"manual"` for
+  the other 17 (spec §5.1). `binary` is a **base name**, never a filename —
+  Phase 0 found three different install shapes across four CLIs.
 - Built-in `templates.toml` — Solo, Duo, Squad, Full team, with the six role
   briefings from spec §10.
 - User-file merge by `id`, user over built-in.
@@ -119,7 +143,7 @@ The heart of the design, and entirely pure.
 - Briefing flattening: newlines stripped at send time; templates keep readable
   multi-line source.
 - Coordinator briefing assembled from the finished roster, including the
-  ID-compaction warning and the match-on-role-label instruction (spec §9).
+  match-on-role-label instruction (spec §9).
 
 **Tests** — snapshot the step sequence for each built-in template; coordinator
 pane first / briefing last; flattening produces exactly one line; a dropped pane
@@ -144,10 +168,13 @@ run these tests.**
   pane, and what remains unexecuted.
 - Progress events streamed to the caller (a channel; Phase 7 forwards these to the UI).
 
-**Tests (against fake herdr)** — the four scripted scenarios from spec §12:
+**Tests (against fake herdr)** — the scripted scenarios from spec §12:
 blocked-then-idle fires the briefing; never-leaves-`working` times out and
-withholds; teardown-then-`ReReadPaneIds` uses post-compaction IDs; a mid-plan
-failure leaves earlier panes untouched and reports the right step.
+withholds; a mid-plan failure leaves earlier panes untouched and reports the right
+step; and the regression Phase 0 bought us — **a `manual`-tier CLI reporting
+`idle` must NOT be auto-briefed**, which is the Gemini case as an executable test.
+
+Note: the old `ReReadPaneIds` scenario is gone with the compaction handling.
 
 **Exit** — plans execute; failures are legible; no briefing is ever sent to a
 non-ready pane.
@@ -167,7 +194,9 @@ non-ready pane.
 - Stage 1 orchestration: setup workspace, one bare-binary pane per unverified CLI,
   1 s polling of `pane get` + `pane read`, URL/device-code extraction by regex,
   5-minute cap, cancellable.
-- Teardown then `ReReadPaneIds`, in that order.
+- Teardown: close setup panes, then the setup workspace.
+- Stage 1 runs **in the target project directory** so first-run trust prompts are
+  cleared there rather than resurfacing in Stage 2. Cache key is CLI + project.
 
 **Tests** — preflight classifies present/missing correctly with a stubbed
 `where`; cache hit skips Stage 1 and cache miss doesn't; a CLI reaching `idle`
