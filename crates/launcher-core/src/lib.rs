@@ -12,6 +12,7 @@
 pub mod config;
 pub mod execute;
 pub mod firstrun;
+pub mod github;
 pub mod herdr;
 pub mod plan;
 pub mod preflight;

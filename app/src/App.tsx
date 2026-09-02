@@ -237,6 +237,8 @@ function ProjectStep(props: {
         </button>
       </div>
 
+      <NewRepoPanel setProject={props.setProject} />
+
       <h3>Already running in herdup's session</h3>
       {props.workspaces.length === 0 ? (
         <p className="muted">
@@ -267,6 +269,133 @@ function ProjectStep(props: {
         </button>
       </div>
     </section>
+  );
+}
+
+/// Create a GitHub repo and use it as the project.
+///
+/// Collapsed by default: this is the only thing herdup does that reaches outside
+/// the machine, so it should not sit open inviting an accidental click.
+function NewRepoPanel(props: { setProject: (p: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [owners, setOwners] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const [owner, setOwner] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
+  const [into, setInto] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [created, setCreated] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    api.ghOwners().then(setOwners).catch(() => setOwners([]));
+    api.defaultProjectsRoot().then((r) => r && setInto((v) => v || r));
+  }, [open]);
+
+  if (!open) {
+    return (
+      <p className="note">
+        Starting something new?{" "}
+        <button data-testid="new-repo-open" onClick={() => setOpen(true)}>
+          Create a GitHub repository
+        </button>
+      </p>
+    );
+  }
+
+  const create = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const repo = await api.createRepo({
+        name,
+        owner: owner || null,
+        public: isPublic,
+        into,
+        description: null,
+      });
+      setCreated(repo.path);
+      props.setProject(repo.path);
+    } catch (e) {
+      setProblem(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="panel" data-testid="new-repo">
+      <header>
+        <strong>New GitHub repository</strong>
+        <button onClick={() => setOpen(false)}>cancel</button>
+      </header>
+
+      <div className="row" style={{ marginTop: 10 }}>
+        <select
+          value={owner}
+          data-testid="new-repo-owner"
+          onChange={(e) => setOwner(e.target.value)}
+          style={{ flex: "none" }}
+        >
+          <option value="">(default account)</option>
+          {owners.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <input
+          value={name}
+          data-testid="new-repo-name"
+          onChange={(e) => setName(e.target.value)}
+          placeholder="repository name"
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="row" style={{ marginTop: 8 }}>
+        <input
+          value={into}
+          data-testid="new-repo-into"
+          onChange={(e) => setInto(e.target.value)}
+          placeholder="clone into which folder"
+          spellCheck={false}
+        />
+      </div>
+
+      <label className="ackbox" style={{ marginTop: 10, borderColor: isPublic ? undefined : "var(--line)" }}>
+        <input
+          type="checkbox"
+          data-testid="new-repo-public"
+          checked={isPublic}
+          onChange={(e) => setIsPublic(e.target.checked)}
+        />
+        <span>
+          {isPublic
+            ? "PUBLIC — this repository will be visible to anyone."
+            : "Private (recommended). Tick to make it public instead."}
+        </span>
+      </label>
+
+      {problem && <div className="error" data-testid="new-repo-error">{problem}</div>}
+      {created && (
+        <p className="note" data-testid="new-repo-created">
+          Created and cloned to <code>{created}</code>. It is now the selected project.
+        </p>
+      )}
+
+      <div className="actions">
+        <button
+          className="primary"
+          data-testid="new-repo-create"
+          disabled={!name || !into || busy || !!created}
+          onClick={create}
+        >
+          {busy ? "Creating…" : "Create and clone"}
+        </button>
+      </div>
+    </div>
   );
 }
 

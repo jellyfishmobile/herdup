@@ -132,7 +132,17 @@ export type LaunchOptions = {
   overrides: [number, string][];
 };
 
+export type CreatedRepo = { url: string | null; path: string };
+
 export const api = {
+  ghOwners: () => invoke<string[]>("gh_owners"),
+  createRepo: (args: {
+    name: string;
+    owner: string | null;
+    public: boolean;
+    into: string;
+    description: string | null;
+  }) => invoke<CreatedRepo>("create_repo", args),
   listTemplates: () => invoke<Template[]>("list_templates"),
   listClis: () => invoke<Cli[]>("list_clis"),
   listWorkspaces: () => invoke<Workspace[]>("list_workspaces"),

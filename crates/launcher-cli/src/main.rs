@@ -21,6 +21,7 @@ enum AppError {
     Herdr(HerdrError),
     Config(ConfigError),
     Plan(launcher_core::plan::PlanError),
+    Gh(launcher_core::github::GhError),
 }
 
 impl std::fmt::Display for AppError {
@@ -29,6 +30,7 @@ impl std::fmt::Display for AppError {
             AppError::Herdr(e) => write!(f, "{e}"),
             AppError::Config(e) => write!(f, "{e}"),
             AppError::Plan(e) => write!(f, "{e}"),
+            AppError::Gh(e) => write!(f, "{e}"),
         }
     }
 }
@@ -53,6 +55,7 @@ fn main() -> std::process::ExitCode {
         Some("plan") => show_plan(&args[1..]),
         Some("preflight") => show_preflight(&args[1..]),
         Some("launch") => launch(&args[1..]),
+        Some("new-repo") => new_repo(&args[1..]),
         Some("smoke") => smoke(&args[1..]),
         Some("help") | Some("--help") | Some("-h") | None => {
             usage();
@@ -90,6 +93,8 @@ fn usage() {
          launcher-cli preflight --template ID [--cwd PATH] [--session NAME]\n  \
          launcher-cli launch --template ID [--cwd PATH] [--session NAME]\n                       \
          [--skip N]... [--cli N=CLI] [--no-terminal] [--skip-first-run] [--yes]\n  \
+         launcher-cli new-repo --name NAME [--owner OWNER] [--public]\n                          \
+         [--into PATH] [--description TEXT] [--template ID] [--yes]\n  \
          launcher-cli smoke [--session NAME] [--cwd PATH]\n\n\
          `plan` is a dry run: it prints what a launch would do and changes nothing.\n\
          `smoke` creates and destroys an isolated named session. It never touches\n\
@@ -715,6 +720,95 @@ fn launch(args: &[String]) -> Result<(), AppError> {
         outcome.panes.len()
     );
     Ok(())
+}
+
+/// Create a GitHub repository, clone it, and optionally launch a team into it.
+fn new_repo(args: &[String]) -> Result<(), AppError> {
+    use launcher_core::github::{Gh, NewRepo, Visibility};
+
+    let Some(name) = flag(args, "--name") else {
+        eprintln!("new-repo: --name NAME is required");
+        return Ok(());
+    };
+    let into = flag(args, "--into")
+        .map(PathBuf::from)
+        .or_else(|| launcher_core::Settings::load().projects_root_path())
+        .unwrap_or(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let gh = Gh::discover().map_err(AppError::Gh)?;
+    let mut repo = NewRepo::private(&name, &into);
+    repo.owner = flag(args, "--owner");
+    repo.description = flag(args, "--description");
+    if args.iter().any(|a| a == "--public") {
+        repo.visibility = Visibility::Public;
+    }
+
+    // Everything checkable, checked before anything is created.
+    repo.validate().map_err(AppError::Gh)?;
+    if !gh.is_authenticated() {
+        return Err(AppError::Gh(
+            launcher_core::github::GhError::NotAuthenticated,
+        ));
+    }
+
+    let owner_label = repo.owner.clone().unwrap_or_else(|| {
+        gh.owners()
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "your account".into())
+    });
+    println!(
+        "Create a {} repository:",
+        match repo.visibility {
+            Visibility::Private => "PRIVATE",
+            Visibility::Public => "PUBLIC",
+        }
+    );
+    println!("  {owner_label}/{name}");
+    println!("  clone into {}", repo.destination().display());
+    if repo.visibility == Visibility::Public {
+        println!("\n  A public repository is visible to anyone.");
+    }
+
+    // Creating a repository is outward-facing and cannot be quietly undone, so
+    // it never happens without an explicit yes.
+    if !args.iter().any(|a| a == "--yes") {
+        println!("\nNothing has been created. Re-run with --yes to proceed.");
+        return Ok(());
+    }
+
+    println!("\n-> gh {}", repo.args().join(" "));
+    let created = gh.create(&repo).map_err(AppError::Gh)?;
+    println!(
+        "   created {}",
+        created.url.as_deref().unwrap_or("(url unknown)")
+    );
+    println!("   cloned to {}", created.path.display());
+
+    match flag(args, "--template") {
+        Some(template) => {
+            println!("\nLaunching '{template}' into the new repository…\n");
+            let mut launch_args = vec![
+                "--template".to_string(),
+                template,
+                "--cwd".to_string(),
+                created.path.display().to_string(),
+                // A brand-new clone is a clean repo, so no warning would fire —
+                // but pass --yes so the flow does not stop on a technicality.
+                "--yes".to_string(),
+            ];
+            launch_args.extend(args.iter().filter(|a| *a == "--no-terminal").cloned());
+            launch(&launch_args)
+        }
+        None => {
+            println!("\nLaunch a team into it with:");
+            println!(
+                "  launcher-cli launch --template squad --cwd {}",
+                created.path.display()
+            );
+            Ok(())
+        }
+    }
 }
 
 fn smoke(args: &[String]) -> Result<(), AppError> {

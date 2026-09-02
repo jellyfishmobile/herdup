@@ -671,6 +671,56 @@ fn send_briefing_now_blocking(
     Ok(outcome_dto(outcome))
 }
 
+#[derive(Serialize, Clone)]
+pub struct CreatedRepoDto {
+    url: Option<String>,
+    path: String,
+}
+
+/// GitHub accounts and organisations the user could create under.
+#[tauri::command]
+async fn gh_owners() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        launcher_core::github::Gh::discover()
+            .map(|gh| gh.owners())
+            .unwrap_or_default()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Create a GitHub repository and clone it.
+///
+/// **The one outward-facing action herdup takes.** The UI form is the
+/// confirmation; everything checkable is validated before the call, and the
+/// destination is never overwritten.
+#[tauri::command]
+async fn create_repo(
+    name: String,
+    owner: Option<String>,
+    public: bool,
+    into: String,
+    description: Option<String>,
+) -> Result<CreatedRepoDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use launcher_core::github::{Gh, NewRepo, Visibility};
+        let gh = Gh::discover().map_err(|e| e.to_string())?;
+        let mut repo = NewRepo::private(name, PathBuf::from(into));
+        repo.owner = owner.filter(|o| !o.trim().is_empty());
+        repo.description = description.filter(|d| !d.trim().is_empty());
+        if public {
+            repo.visibility = Visibility::Public;
+        }
+        let created = gh.create(&repo).map_err(|e| e.to_string())?;
+        Ok(CreatedRepoDto {
+            url: created.url,
+            path: created.path.display().to_string(),
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 async fn open_terminal(project: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || open_terminal_blocking(project))
@@ -717,6 +767,8 @@ pub fn run() {
             finish_first_run,
             launch,
             send_briefing_now,
+            gh_owners,
+            create_repo,
             open_terminal,
             default_projects_root,
         ])
