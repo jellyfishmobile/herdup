@@ -130,13 +130,13 @@ export default function App() {
       </header>
 
       {error && (
-        <div className="error" role="alert">
+        <div className="error" role="alert" data-testid="error">
           {error}
           <button onClick={() => setError(null)}>dismiss</button>
         </div>
       )}
 
-      <main>
+      <main data-testid={`step-${step}`}>
         {step === "project" && (
           <ProjectStep
             project={project}
@@ -230,6 +230,7 @@ function ProjectStep(props: {
           onChange={(e) => props.setProject(e.target.value)}
           placeholder="path to a project folder"
           spellCheck={false}
+          data-testid="project-input"
         />
         <button onClick={props.pickFolder} disabled={props.busy}>
           Browse…
@@ -256,7 +257,12 @@ function ProjectStep(props: {
       )}
 
       <div className="actions">
-        <button className="primary" disabled={!props.project || props.busy} onClick={props.onNext}>
+        <button
+          className="primary"
+          data-testid="project-next"
+          disabled={!props.project || props.busy}
+          onClick={props.onNext}
+        >
           Next
         </button>
       </div>
@@ -289,6 +295,7 @@ function TeamStep(props: {
           <button
             key={t.id}
             className={`card ${t.id === props.templateId ? "on" : ""}`}
+            data-testid={`template-${t.id}`}
             onClick={() => props.setTemplateId(t.id)}
           >
             <strong>{t.display_name}</strong>
@@ -369,7 +376,12 @@ function TeamStep(props: {
 
       <div className="actions">
         <button onClick={props.onBack}>Back</button>
-        <button className="primary" onClick={props.onNext} disabled={props.busy}>
+        <button
+          className="primary"
+          data-testid="team-next"
+          onClick={props.onNext}
+          disabled={props.busy}
+        >
           Check environment
         </button>
       </div>
@@ -406,9 +418,10 @@ function PreflightStep(props: {
       </div>
 
       {r.warnings.map((w, i) => (
-        <label key={i} className="ackbox">
+        <label key={i} className="ackbox" data-testid={`warning-${i}`}>
           <input
             type="checkbox"
+            data-testid={`ack-${i}`}
             checked={ack.has(i)}
             onChange={(e) =>
               setAck((s) => {
@@ -475,7 +488,7 @@ function PreflightStep(props: {
       </ul>
 
       {r.blocking.length > 0 && (
-        <div className="error">
+        <div className="error" data-testid="blocking">
           <strong>Resolve before launching:</strong>
           <ul>
             {r.blocking.map((b) => (
@@ -489,6 +502,7 @@ function PreflightStep(props: {
         <button onClick={props.onBack}>Back</button>
         <button
           className="primary"
+          data-testid="preflight-next"
           onClick={props.onNext}
           disabled={!r.can_launch || !allAcked || props.busy}
         >

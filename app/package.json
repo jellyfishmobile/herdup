@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "node e2e/run.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

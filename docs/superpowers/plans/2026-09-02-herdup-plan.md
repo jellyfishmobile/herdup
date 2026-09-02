@@ -363,11 +363,26 @@ against the checklist below.
       *switch CLI* / *drop pane* remediation, and first-run hint copying.
 - [x] **Verified visually:** the window renders and IPC works — the first screen
       showed live `list_workspaces` output.
-- [ ] **NOT verified: the full flow through the GUI.** Team → preflight →
-      first-run → launch → done has not been driven end to end in the window.
-      A coordinate-based automation attempt was unreliable (the window moved
-      between screenshots) and was abandoned. This stays a manual check.
+- [x] **Verified by a selector-based harness** (`app/e2e/`, 12 checks): screen
+      navigation, IPC, plan preview, template selection, and every guardrail.
+      Runs the real release binary under `tauri-driver`, addressing elements by
+      `data-testid` — a selector cannot land outside the window, which is what
+      made the earlier coordinate-clicking attempt dangerous.
+- [ ] Completing a launch through the GUI is **deliberately not** covered: the
+      harness stops before the final button, so it starts no agents and creates
+      no session. Launching is verified in Phase 6 against real herdr.
 - [ ] macOS: unbuilt and unrun.
+
+**Two bugs the harness found immediately, both invisible to the earlier method:**
+
+1. **`cargo build` does not produce a working Tauri app.** Even a release build
+   opened on *"localhost refused to connect"* — the dev/production decision is
+   made by the Tauri CLI through env vars a plain cargo build never sets. Must
+   use `cargo tauri build`.
+2. **Synchronous Tauri commands froze the window.** `run_preflight` shells out to
+   `herdr`, `git` and `gh` on the main thread; under WebDriver it deadlocked with
+   no error, and in normal use it would freeze the window for seconds. Every
+   process-spawning command is now `async` + `spawn_blocking`.
 
 **Notable:** the app deliberately uses herdup's own named herdr session, so it
 can never disturb workspaces the user started themselves — the same isolation

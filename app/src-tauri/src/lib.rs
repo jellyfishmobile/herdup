@@ -265,7 +265,13 @@ fn list_clis() -> Result<Vec<CliDto>, String> {
 /// resolved, because resolving it means stopping their server and exiting their
 /// panes.
 #[tauri::command]
-fn list_workspaces() -> Result<Vec<WorkspaceDto>, String> {
+async fn list_workspaces() -> Result<Vec<WorkspaceDto>, String> {
+    tauri::async_runtime::spawn_blocking(list_workspaces_blocking)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn list_workspaces_blocking() -> Result<Vec<WorkspaceDto>, String> {
     let cli = client()?;
     match cli.workspace_list() {
         Ok(list) => Ok(list
@@ -313,8 +319,20 @@ fn plan_dto(plan: &LaunchPlan) -> PlanDto {
     }
 }
 
+/// Inspect the environment.
+///
+/// **Async on purpose.** This shells out to `herdr`, `git` and `gh`; as a
+/// synchronous command it blocked Tauri's main thread, and the webview froze
+/// with no error — the UI simply never left the previous screen. Every command
+/// that spawns a process must go through `spawn_blocking`.
 #[tauri::command]
-fn run_preflight(options: LaunchOptions) -> Result<PreflightDto, String> {
+async fn run_preflight(options: LaunchOptions) -> Result<PreflightDto, String> {
+    tauri::async_runtime::spawn_blocking(move || run_preflight_blocking(options))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn run_preflight_blocking(options: LaunchOptions) -> Result<PreflightDto, String> {
     let (plan, registry, settings) = build_plan(&options)?;
     let cli = client()?;
     let pf = Preflight::run(&cli, &plan, &registry, &settings, &SystemResolver);
@@ -383,7 +401,19 @@ fn run_preflight(options: LaunchOptions) -> Result<PreflightDto, String> {
 // ---- first run -------------------------------------------------------------
 
 #[tauri::command]
-fn start_first_run(
+async fn start_first_run(
+    app: tauri::AppHandle,
+    options: LaunchOptions,
+) -> Result<Vec<FirstRunPaneDto>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        start_first_run_blocking(options, state)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn start_first_run_blocking(
     options: LaunchOptions,
     state: State<'_, AppState>,
 ) -> Result<Vec<FirstRunPaneDto>, String> {
@@ -415,8 +445,19 @@ fn start_first_run(
 
 /// One polling round. The UI owns the interval, which keeps the backend free of
 /// timers and matches how `FirstRun` is tested.
+/// Polled every two seconds by the UI, so blocking here would stutter the whole
+/// window.
 #[tauri::command]
-fn poll_first_run(state: State<'_, AppState>) -> Result<Vec<FirstRunPaneDto>, String> {
+async fn poll_first_run(app: tauri::AppHandle) -> Result<Vec<FirstRunPaneDto>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        poll_first_run_blocking(state)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn poll_first_run_blocking(state: State<'_, AppState>) -> Result<Vec<FirstRunPaneDto>, String> {
     let cli = client()?;
     let mut guard = state.first_run.lock().unwrap();
     let Some(session) = guard.as_mut() else {
@@ -430,7 +471,16 @@ fn poll_first_run(state: State<'_, AppState>) -> Result<Vec<FirstRunPaneDto>, St
 ///
 /// Only CLIs that reached their prompt are cached, so abandoning caches nothing.
 #[tauri::command]
-fn finish_first_run(state: State<'_, AppState>) -> Result<(), String> {
+async fn finish_first_run(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        finish_first_run_blocking(state)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn finish_first_run_blocking(state: State<'_, AppState>) -> Result<(), String> {
     let cli = client()?;
     let Some(session) = state.first_run.lock().unwrap().take() else {
         return Ok(());
@@ -595,7 +645,19 @@ fn outcome_dto(outcome: &Outcome) -> OutcomeDto {
 /// Goes through the agent surface, so if the dialog is still up herdr refuses
 /// again rather than typing the briefing into it.
 #[tauri::command]
-fn send_briefing_now(index: usize, state: State<'_, AppState>) -> Result<OutcomeDto, String> {
+async fn send_briefing_now(app: tauri::AppHandle, index: usize) -> Result<OutcomeDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        send_briefing_now_blocking(index, state)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn send_briefing_now_blocking(
+    index: usize,
+    state: State<'_, AppState>,
+) -> Result<OutcomeDto, String> {
     let cli = client()?;
     let mut guard = state.outcome.lock().unwrap();
     let outcome = guard.as_mut().ok_or("no launch in progress")?;
@@ -610,7 +672,13 @@ fn send_briefing_now(index: usize, state: State<'_, AppState>) -> Result<Outcome
 }
 
 #[tauri::command]
-fn open_terminal(project: String) -> Result<String, String> {
+async fn open_terminal(project: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || open_terminal_blocking(project))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn open_terminal_blocking(project: String) -> Result<String, String> {
     let settings = Settings::load();
     let path = PathBuf::from(project);
     match launcher_core::terminal::open_with_fallback(
