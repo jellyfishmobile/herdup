@@ -1032,8 +1032,100 @@ Confirm the user's `/Applications/herdup.app` and their settings file are untouc
 
 ---
 
+### Task 8: show the running version in the top bar
+
+Added 2026-09-03 after QA: with the version only visible in the "up to date"
+note, nobody can tell which build is running, so an update cannot be
+confirmed by eye.
+
+**Files:**
+- Modify: `app/src-tauri/src/lib.rs` (one command, one handler entry)
+- Modify: `app/src/api.ts` (one call)
+- Modify: `app/src/App.tsx` (state, effect, the top bar)
+- Modify: `app/src/styles.css` (append)
+
+- [ ] **Step 1: The command**
+
+In `app/src-tauri/src/lib.rs`, directly before `fn describe_update_error`:
+
+```rust
+/// The version baked into this build, for the top bar. Read from the app
+/// itself rather than the frontend bundle so the two can never disagree.
+#[tauri::command]
+fn app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+```
+
+Register it in `tauri::generate_handler![ … ]` directly before `check_for_update`:
+
+```rust
+            app_version,
+```
+
+Run: `cargo clippy -p herdup-app --all-targets -- -D warnings`
+Expected: `Finished`, no warnings.
+
+- [ ] **Step 2: The call**
+
+In `app/src/api.ts`, inside `export const api = { … }`, directly before `checkForUpdate`:
+
+```ts
+  appVersion: () => invoke<string>("app_version"),
+```
+
+- [ ] **Step 3: State and the top bar**
+
+In `App()` in `app/src/App.tsx`, next to the other update state:
+
+```tsx
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    api.appVersion().then(setVersion).catch(() => setVersion(null));
+  }, []);
+```
+
+Replace `<span className="mark">herdup</span>` in the top bar with:
+
+```tsx
+        <span className="brand">
+          <span className="mark">herdup</span>
+          {version && (
+            <span className="version" data-testid="app-version">
+              v{version}
+            </span>
+          )}
+        </span>
+```
+
+- [ ] **Step 4: Styles**
+
+Append to `app/src/styles.css`:
+
+```css
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.version { font-size: 10.5px; color: var(--faint); letter-spacing: 0.04em; }
+```
+
+- [ ] **Step 5: Verify and commit**
+
+Run: `cd app && npm run build`
+Expected: `tsc` silent; vite `✓ built`.
+
+```bash
+cargo fmt --all
+git commit -m "Show the running version in the top bar" -- app/src-tauri/src/lib.rs app/src/api.ts app/src/App.tsx app/src/styles.css
+```
+
+QA's next launch of a rebuilt test copy shows `v0.1.0` left of the dots, and
+`v0.1.1` after an install.
+
+---
+
 ## Self-review
 
 **Spec coverage.** Startup delay and silence: Task 4 step 2. Ten-second timeout: Task 3. Banner, Not now, manual check states: Task 4. Install with progress, verify, restart: Task 3 + 4. Translocation: Tasks 2, 3, 4. Windows passive mode, updater artifacts, ad-hoc signing, public key, endpoint: Task 6. Settings override: Task 1. CI secrets and notes: Task 5. Key custody: Task 6 preamble and the spec. Error table: `describe_update_error`. Testing: Tasks 1–2 unit, Task 7 QA. Not-verified list: Task 5 plan doc.
+
+**Task 8.** `app_version` ↔ `api.appVersion()`; top-bar text `v{version}` with test id `app-version`.
 
 **Type consistency.** `UpdateCheckDto { current_version, update }` ↔ `UpdateCheck`; `UpdateDto { version, notes, translocated }` ↔ `UpdateInfo`; `UpdateProgressDto { downloaded, total, installing }` ↔ `UpdateProgress`; event name `update-progress` in both; command names `check_for_update` / `install_update` in both.
