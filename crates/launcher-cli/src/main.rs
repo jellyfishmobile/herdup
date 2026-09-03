@@ -93,7 +93,8 @@ fn usage() {
          launcher-cli plan --template ID [--cwd PATH] [--skip N]... [--cli N=CLI]...\n  \
          launcher-cli preflight --template ID [--cwd PATH] [--session NAME]\n  \
          launcher-cli launch --template ID [--cwd PATH] [--session NAME]\n                       \
-         [--skip N]... [--cli N=CLI] [--no-terminal] [--skip-first-run] [--yes]\n  \
+         [--skip N]... [--cli N=CLI] [--no-terminal] [--skip-first-run] [--yes]\n      \
+         `--template repo` uses the project's own .herdr/team.toml\n  \
          launcher-cli new-repo --name NAME [--owner OWNER] [--public]\n                          \
          [--into PATH] [--description TEXT] [--template ID] [--yes]\n  \
          launcher-cli smoke [--session NAME] [--cwd PATH]\n\n\
@@ -215,16 +216,9 @@ fn show_plan(args: &[String]) -> Result<(), AppError> {
         .unwrap_or(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     let registry = launcher_core::config::load_registry()?;
-    let templates = launcher_core::config::load_templates(&registry)?;
-    let Some(template) = templates.get(&id) else {
-        eprintln!(
-            "plan: no template '{id}'. Known: {}",
-            template_ids(&templates)
-        );
-        return Ok(());
-    };
+    let template = resolve_template("plan", &id, &cwd, &registry)?;
 
-    let mut request = launcher_core::plan::LaunchRequest::new(&cwd, template);
+    let mut request = launcher_core::plan::LaunchRequest::new(&cwd, &template);
     for raw in flags(args, "--skip") {
         match raw.parse::<usize>() {
             Ok(i) => request = request.skip_pane(i),
@@ -290,6 +284,37 @@ fn show_plan(args: &[String]) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Load the templates for `cwd` and pick `id`, or explain why not.
+///
+/// `repo` is the project's own `.herdr/team.toml`; its absence or its load
+/// error is the message. Any other unknown id lists what exists. An unknown
+/// or unloadable template exits 2 here rather than returning, the same code
+/// `main` uses for an unknown command.
+fn resolve_template(
+    verb: &str,
+    id: &str,
+    cwd: &std::path::Path,
+    registry: &launcher_core::registry::Registry,
+) -> Result<launcher_core::template::Template, AppError> {
+    use launcher_core::template::{REPO_TEAM_FILE, REPO_TEMPLATE_ID};
+    let (templates, repo_error) = launcher_core::config::load_templates_for(cwd, registry)?;
+    if let Some(t) = templates.get(id) {
+        return Ok(t.clone());
+    }
+    if id == REPO_TEMPLATE_ID {
+        match repo_error {
+            Some(e) => eprintln!("{verb}: {e}"),
+            None => eprintln!("{verb}: no {REPO_TEAM_FILE} in {}", cwd.display()),
+        }
+    } else {
+        eprintln!(
+            "{verb}: no template '{id}'. Known: {}",
+            template_ids(&templates)
+        );
+    }
+    std::process::exit(2);
+}
+
 fn template_ids(t: &launcher_core::template::Templates) -> String {
     t.iter()
         .map(|x| x.id.clone())
@@ -312,17 +337,10 @@ fn show_preflight(args: &[String]) -> Result<(), AppError> {
     let session = flag(args, "--session").unwrap_or_else(|| "herdup".to_string());
 
     let registry = launcher_core::config::load_registry()?;
-    let templates = launcher_core::config::load_templates(&registry)?;
-    let Some(template) = templates.get(&id) else {
-        eprintln!(
-            "preflight: no template '{id}'. Known: {}",
-            template_ids(&templates)
-        );
-        return Ok(());
-    };
+    let template = resolve_template("preflight", &id, &cwd, &registry)?;
     let settings = launcher_core::Settings::load();
     let p = launcher_core::plan::plan(
-        &launcher_core::plan::LaunchRequest::new(&cwd, template),
+        &launcher_core::plan::LaunchRequest::new(&cwd, &template),
         &registry,
     )
     .map_err(AppError::Plan)?;
@@ -474,17 +492,10 @@ fn launch(args: &[String]) -> Result<(), AppError> {
     let mut terminal_opened = false;
 
     let registry = launcher_core::config::load_registry()?;
-    let templates = launcher_core::config::load_templates(&registry)?;
-    let Some(template) = templates.get(&id) else {
-        eprintln!(
-            "launch: no template '{id}'. Known: {}",
-            template_ids(&templates)
-        );
-        return Ok(());
-    };
+    let template = resolve_template("launch", &id, &cwd, &registry)?;
     let mut settings = launcher_core::Settings::load();
 
-    let mut request = launcher_core::plan::LaunchRequest::new(&cwd, template);
+    let mut request = launcher_core::plan::LaunchRequest::new(&cwd, &template);
     for raw in flags(args, "--skip") {
         if let Ok(i) = raw.parse::<usize>() {
             request = request.skip_pane(i);
