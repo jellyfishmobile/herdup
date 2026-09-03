@@ -26,6 +26,7 @@ pub use config::ConfigError;
 pub use herdr::{HerdrCli, HerdrError};
 pub use plan::{plan, BriefingGate, LaunchPlan, LaunchRequest, PaneRef, Step};
 pub use preflight::{Preflight, SystemResolver};
+pub use proc::login_shell_path;
 pub use registry::{BriefingTrust, CliEntry, Registry};
 pub use settings::Settings;
 pub use template::{PaneSpec, Template, Templates};

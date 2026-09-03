@@ -8,7 +8,13 @@ use launcher_core::template::Templates;
 use std::path::Path;
 
 fn project() -> &'static Path {
-    Path::new("D:\\work\\herdup")
+    // A native path for the host: the label test takes the folder's last
+    // component, and a backslash is not a separator on Unix.
+    if cfg!(windows) {
+        Path::new("D:\\work\\herdup")
+    } else {
+        Path::new("/work/herdup")
+    }
 }
 
 /// Compact one-line rendering of a step, for sequence assertions.

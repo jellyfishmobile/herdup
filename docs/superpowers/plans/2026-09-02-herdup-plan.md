@@ -311,7 +311,7 @@ Split into `blocking_issues()` (the user must act) and `auto_resolvable_issues()
 **Tests** — command construction per OS and for a path with spaces. Actually
 opening a terminal is verified manually.
 
-**Exit — COMPLETE on Windows 2026-09-02; macOS still unverified.**
+**Exit — COMPLETE on Windows 2026-09-02; macOS verified 2026-09-03.**
 
 - [x] **A full six-agent team launched end to end from the command line, with no
       GUI in existence** — 75.5 s, exit 0, all six briefed, coordinator briefed
@@ -320,7 +320,10 @@ opening a terminal is verified manually.
       cover both shapes from either host. **Actually opening a terminal is still
       the manual check**, on both OSes.
 - [x] 131 tests, clippy `-D warnings` and `fmt --check` clean.
-- [ ] macOS: nothing in this phase has run on a Mac.
+- [x] macOS (2026-09-03): `launcher-cli smoke` passed against herdr 0.8.2, and
+      the Terminal.app handoff opened a window running herdr in an isolated
+      session. Terminal.app runs the generated script inside the user's login
+      shell, so a bare `herdr` resolved from `~/.local/bin`.
 
 **This phase forced the agent-API rework** — see
 [`docs/notes/2026-09-02-agent-api-discovery.md`](../../notes/2026-09-02-agent-api-discovery.md).
@@ -371,7 +374,13 @@ against the checklist below.
 - [ ] Completing a launch through the GUI is **deliberately not** covered: the
       harness stops before the final button, so it starts no agents and creates
       no session. Launching is verified in Phase 6 against real herdr.
-- [ ] macOS: unbuilt and unrun.
+- [x] macOS (2026-09-03): `cargo tauri build` produces
+      `herdup_0.1.0_aarch64.dmg` and the app launches. The selector harness
+      cannot run here — tauri-driver has no macOS backend — so the GUI flow is
+      still unverified on a Mac. Two macOS-only bugs had to be fixed before
+      anything could resolve: launchd's bare PATH (herdup now adopts the login
+      shell's PATH at startup) and the herdr fallback probe missing herdr's
+      actual install directory, `~/.local/bin`.
 
 **Two bugs the harness found immediately, both invisible to the earlier method:**
 

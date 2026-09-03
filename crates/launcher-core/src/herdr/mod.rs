@@ -86,7 +86,7 @@ impl HerdrCli {
             return Ok(HerdrCli::new(path));
         }
         for candidate in default_install_paths() {
-            if candidate.is_file() {
+            if is_runnable(&candidate) {
                 return Ok(HerdrCli::new(candidate));
             }
         }
@@ -670,6 +670,31 @@ pub fn which(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Whether an install-path candidate is something we could actually spawn.
+///
+/// A regular file is necessary but, on Unix, not sufficient: a stray
+/// non-executable `~/.local/bin/herdr` (a half-finished download, a hand-written
+/// placeholder) would otherwise be reported as found, and the failure only
+/// surfaces later as "Permission denied" from spawn. Windows has no execute
+/// bit, so there a regular file is the whole check.
+fn is_runnable(path: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        (meta.permissions().mode() & 0o111) != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
 fn default_install_paths() -> Vec<PathBuf> {
     let mut out = Vec::new();
     if cfg!(windows) {
@@ -683,6 +708,13 @@ fn default_install_paths() -> Vec<PathBuf> {
             );
         }
     } else if let Ok(home) = std::env::var("HOME") {
+        // herdr's install.sh defaults to $HOME/.local/bin (HERDR_INSTALL_DIR).
+        out.push(
+            PathBuf::from(&home)
+                .join(".local")
+                .join("bin")
+                .join("herdr"),
+        );
         out.push(
             PathBuf::from(&home)
                 .join(".herdr")
@@ -692,4 +724,79 @@ fn default_install_paths() -> Vec<PathBuf> {
         out.push(PathBuf::from("/usr/local/bin/herdr"));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    /// herdr's install.sh puts the binary in `$HOME/.local/bin` by default, so
+    /// that candidate must be tried before the older `~/.herdr/bin` layout and
+    /// the system-wide `/usr/local/bin` fallback. Otherwise a stale copy in one
+    /// of those wins over the one the user just installed.
+    #[cfg(not(windows))]
+    #[test]
+    fn unix_candidates_try_local_bin_first() {
+        use super::default_install_paths;
+        use std::path::PathBuf;
+
+        let home = PathBuf::from(std::env::var("HOME").expect("HOME is set on Unix test hosts"));
+        let local_bin = home.join(".local").join("bin").join("herdr");
+        let dot_herdr = home.join(".herdr").join("bin").join("herdr");
+        let usr_local = PathBuf::from("/usr/local/bin/herdr");
+
+        let candidates = default_install_paths();
+        let position = |wanted: &PathBuf| candidates.iter().position(|c| c == wanted);
+
+        let local_idx = position(&local_bin)
+            .unwrap_or_else(|| panic!("{candidates:?} lacks {}", local_bin.display()));
+        let dot_herdr_idx = position(&dot_herdr)
+            .unwrap_or_else(|| panic!("{candidates:?} lacks {}", dot_herdr.display()));
+        let usr_local_idx = position(&usr_local)
+            .unwrap_or_else(|| panic!("{candidates:?} lacks {}", usr_local.display()));
+
+        assert!(
+            local_idx < dot_herdr_idx,
+            "$HOME/.local/bin/herdr must come before $HOME/.herdr/bin/herdr: {candidates:?}"
+        );
+        assert!(
+            local_idx < usr_local_idx,
+            "$HOME/.local/bin/herdr must come before /usr/local/bin/herdr: {candidates:?}"
+        );
+    }
+
+    /// A regular file is not enough. A stray non-executable `herdr` must be
+    /// skipped here rather than reported as found and then failing to spawn.
+    #[cfg(unix)]
+    #[test]
+    fn unix_candidates_must_carry_the_execute_bit() {
+        use super::is_runnable;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = std::env::temp_dir().join(format!("herdup-herdr-exec-{}", std::process::id()));
+        let plain = dir.join("plain").join("herdr");
+        let exec = dir.join("exec").join("herdr");
+        for path in [&plain, &exec] {
+            std::fs::create_dir_all(path.parent().unwrap()).expect("create temp dir");
+            std::fs::write(path, b"#!/bin/sh\n").expect("write candidate");
+        }
+        std::fs::set_permissions(&plain, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(
+            !is_runnable(&plain),
+            "non-executable file must be rejected: {}",
+            plain.display()
+        );
+        assert!(
+            is_runnable(&exec),
+            "executable file must be accepted: {}",
+            exec.display()
+        );
+        assert!(
+            !is_runnable(exec.parent().unwrap()),
+            "a directory has the execute bit but is not a candidate"
+        );
+        assert!(!is_runnable(&dir.join("missing").join("herdr")));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

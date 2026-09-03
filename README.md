@@ -13,15 +13,18 @@ and already knows what its job is.
 unsigned, so SmartScreen will warn — "More info" → "Run anyway", or build from
 source below.
 
-**macOS.** Not yet built. See [status](#status).
+**macOS.** Download `herdup_0.1.0_aarch64.dmg` (Apple silicon) and drag herdup
+into Applications. The app is unsigned and not notarized, so macOS will refuse
+to open a downloaded copy the first time — allow it under System Settings →
+Privacy & Security → "Open Anyway", or build from source below.
 
 You also need:
 
 | | | |
 |---|---|---|
-| [herdr](https://herdr.dev) | **0.8.2 or newer** | `irm https://herdr.dev/install.ps1 \| iex` |
-| At least one agent CLI | e.g. Claude Code | `irm https://claude.ai/install.ps1 \| iex` |
-| [`gh`](https://cli.github.com) | optional | only for creating new repositories |
+| [herdr](https://herdr.dev) | **0.8.2 or newer** | Windows `irm https://herdr.dev/install.ps1 \| iex` · macOS `curl -fsSL https://herdr.dev/install.sh \| sh` |
+| At least one agent CLI | e.g. Claude Code | Windows `irm https://claude.ai/install.ps1 \| iex` · macOS `curl -fsSL https://claude.ai/install.sh \| bash` |
+| [`gh`](https://cli.github.com) | optional | only for creating new repositories (macOS: `brew install gh`) |
 
 > **herdr's Windows builds are preview-only beta** and track the preview update
 > channel. Linux and macOS have stable releases; Windows does not yet. herdup
@@ -66,7 +69,8 @@ These are deliberate.
 ```bash
 cargo install tauri-cli --version "^2" --locked
 cd app
-cargo tauri build              # → target/release/bundle/msi/*.msi
+cargo tauri build              # → target/release/bundle/msi/*.msi (Windows)
+                               #   target/release/bundle/dmg/*.dmg (macOS)
 ```
 
 `cargo build` alone produces a binary that opens on *"localhost refused to
@@ -76,7 +80,7 @@ build through it.
 Tests:
 
 ```bash
-cargo test --workspace         # 151 tests; no herdr installation required
+cargo test --workspace         # 182 tests; no herdr installation required
 cd app && npm run test:e2e     # 12 GUI checks under tauri-driver
 ```
 
@@ -92,10 +96,14 @@ before completing a launch, so it starts no agents. See
 | 7 desktop app | done, verified by the selector harness |
 | 8 GitHub new-repo | done — verified live: created, cloned and deleted a throwaway repo |
 | 9 packaging | `.msi` builds and validates; **never installed on a clean machine** |
-| macOS | **entirely unbuilt and unrun** |
+| macOS | built and run on macOS 26, Apple silicon (2026-09-03): 182 tests, the CLI smoke against herdr 0.8.2, the Terminal.app handoff and the packaged app launching are all verified; **the GUI flow itself has not been driven on a Mac** — tauri-driver has no macOS backend |
 
 A full six-agent team has been launched end to end on Windows: 75 s, all six
 briefed, coordinator briefed last with the roster.
+
+On macOS an app opened from Finder starts with launchd's bare PATH, which has
+none of the user's CLIs on it. herdup adopts the login shell's PATH at startup
+so that herdr, `gh` and the agent CLIs resolve exactly as they do in a terminal.
 
 ## Configuration
 

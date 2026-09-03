@@ -923,6 +923,15 @@ fn default_projects_root() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // A GUI app on macOS starts with launchd's four-directory PATH, which has
+    // none of the user's CLIs on it. Adopt the login shell's PATH before
+    // anything probes for herdr, gh or an agent. Done before the builder so no
+    // thread exists yet when the environment is mutated.
+    if cfg!(target_os = "macos") {
+        if let Some(path) = launcher_core::login_shell_path() {
+            std::env::set_var("PATH", path);
+        }
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
