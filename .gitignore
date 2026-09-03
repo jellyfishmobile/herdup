@@ -15,3 +15,4 @@ app/src-tauri/gen/
 # os
 .DS_Store
 Thumbs.db
+assets/app/

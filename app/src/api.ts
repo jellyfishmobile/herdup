@@ -39,7 +39,11 @@ export type Workspace = {
 };
 
 export type PlannedPane = {
+  /// Compacted index — shifts whenever a pane is dropped. Display only.
   index: number;
+  /// Template index, or null for a pane the user added. Everything that feeds
+  /// back into `skip` or `overrides` must use this, never `index`.
+  origin: number | null;
   role: string;
   cli: string;
   cli_display: string;
@@ -129,11 +133,31 @@ export type Progress = {
   detail: string | null;
 };
 
+/// A role the user can add beyond the template. Ids only travel back — the
+/// briefing text for each lives in the core crate, never here.
+export type AddableRole = {
+  id: string;
+  display_name: string;
+  summary: string;
+  cli: string;
+};
+
+/// Cheap, read-only look at a folder, for the moment a project is chosen.
+export type ProjectStatus = {
+  exists: boolean;
+  name: string;
+  versioned: boolean;
+  branch: string | null;
+  uncommitted: number;
+};
+
 export type LaunchOptions = {
   project: string;
   template: string;
   skip: number[];
   overrides: [number, string][];
+  /// Ids from `listAddableRoles`, in the order they were added.
+  extra: string[];
 };
 
 export type CreatedRepo = { url: string | null; path: string };
@@ -148,6 +172,8 @@ export const api = {
     description: string | null;
   }) => invoke<CreatedRepo>("create_repo", args),
   listTemplates: () => invoke<Template[]>("list_templates"),
+  listAddableRoles: () => invoke<AddableRole[]>("list_addable_roles"),
+  projectStatus: (project: string) => invoke<ProjectStatus>("project_status", { project }),
   listClis: () => invoke<Cli[]>("list_clis"),
   listWorkspaces: () => invoke<Workspace[]>("list_workspaces"),
   previewPlan: (options: LaunchOptions) => invoke<Plan>("preview_plan", { options }),

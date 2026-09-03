@@ -23,7 +23,7 @@
 
 [solo]
 display_name = "Solo"
-description = "One agent. The simplest useful team."
+description = "One teammate, working on its own."
 
 [[solo.pane]]
 role = "Dev"
@@ -40,7 +40,7 @@ you make, and report honestly if they fail.
 
 [duo]
 display_name = "Duo"
-description = "A developer and a reviewer. The reviewer never writes features."
+description = "One writes the code, one reviews everything it writes."
 
 [[duo.pane]]
 role = "Dev"
@@ -70,7 +70,7 @@ inventing something to criticise.
 
 [squad]
 display_name = "Squad"
-description = "A coordinator, two coders, and QA. A good default for real work."
+description = "A lead who splits up the work, two coders, and someone testing."
 
 [[squad.pane]]
 role = "PM"
@@ -128,7 +128,7 @@ feature works; say what you actually verified and what you did not.
 
 [full-team]
 display_name = "Full team"
-description = "Coordinator, two coders, QA, build, and research. Six panes."
+description = "Everything in Squad, plus someone on builds and someone researching."
 
 [[full-team.pane]]
 role = "PM"

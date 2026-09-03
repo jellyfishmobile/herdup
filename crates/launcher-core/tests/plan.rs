@@ -624,3 +624,234 @@ fn every_split_references_a_pane_created_earlier() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// added panes
+//
+// The launcher lets people build a line-up rather than only pick a preset, so
+// the plan builder has to append panes the template never named.
+// ---------------------------------------------------------------------------
+
+fn addable(id: &str) -> launcher_core::template::PaneSpec {
+    launcher_core::template::addable_roles()
+        .into_iter()
+        .find(|r| r.id == id)
+        .unwrap_or_else(|| panic!("addable role {id:?} exists"))
+        .spec
+}
+
+#[test]
+fn every_addable_role_names_a_cli_in_the_registry() {
+    let reg = Registry::builtin();
+    for role in launcher_core::template::addable_roles() {
+        assert!(
+            reg.contains(&role.spec.cli),
+            "addable role {:?} names unknown cli {:?}",
+            role.id,
+            role.spec.cli
+        );
+        assert!(
+            !role.spec.coordinator,
+            "addable role {:?} must never be the coordinator",
+            role.id
+        );
+        assert!(
+            role.spec.split.is_none(),
+            "addable role {:?} must carry no split; plan() attaches it to the root",
+            role.id
+        );
+        assert!(
+            !role.summary.trim().is_empty(),
+            "{:?} needs a summary",
+            role.id
+        );
+        assert!(
+            !role.spec.briefing.trim().is_empty(),
+            "{:?} needs a briefing — the UI must never invent one",
+            role.id
+        );
+    }
+}
+
+#[test]
+fn an_added_pane_is_appended_and_hangs_off_the_root() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("solo").expect("template exists");
+
+    let p = plan(
+        &LaunchRequest::new(project(), t).add_pane(addable("tester")),
+        &reg,
+    )
+    .expect("plans");
+
+    assert_eq!(p.panes.len(), 2);
+    assert_eq!(p.panes[1].role, "Tester");
+    assert!(
+        p.steps.iter().any(
+            |s| matches!(s, Step::SplitPane { from, creates, .. } if from.0 == 0 && creates.0 == 1)
+        ),
+        "the added pane must split from the root"
+    );
+}
+
+#[test]
+fn an_added_pane_gets_its_own_briefing_and_is_never_the_coordinator() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("squad").expect("template exists");
+
+    let p = plan(
+        &LaunchRequest::new(project(), t).add_pane(addable("research")),
+        &reg,
+    )
+    .expect("plans");
+
+    let added = p.panes.last().expect("has panes");
+    assert_eq!(added.role, "Research");
+    assert!(!added.coordinator, "added panes are never the coordinator");
+    assert_eq!(
+        p.panes.iter().filter(|x| x.coordinator).count(),
+        1,
+        "the template's coordinator is still the only one"
+    );
+
+    let briefed_added = p.steps.iter().any(|s| match s {
+        Step::SendBriefing { pane, text, .. } => {
+            pane.0 == added.pane.0
+                && matches!(text, BriefingText::Literal(t) if t.contains("research"))
+        }
+        _ => false,
+    });
+    assert!(briefed_added, "the added pane must get its own briefing");
+}
+
+#[test]
+fn cli_overrides_never_apply_to_added_panes() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("solo").expect("template exists");
+
+    // Index 1 exists only because a pane was added; the override targets the
+    // TEMPLATE index space and must not reach it.
+    let p = plan(
+        &LaunchRequest::new(project(), t)
+            .add_pane(addable("coder"))
+            .override_cli(1, "gemini"),
+        &reg,
+    )
+    .expect("plans");
+
+    assert_eq!(p.panes[1].cli, "claude", "the added pane keeps its own cli");
+}
+
+#[test]
+fn adding_survives_dropping_every_template_pane() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("solo").expect("template exists");
+
+    let p = plan(
+        &LaunchRequest::new(project(), t)
+            .skip_pane(0)
+            .add_pane(addable("coder")),
+        &reg,
+    )
+    .expect("plans");
+
+    assert_eq!(p.panes.len(), 1);
+    assert_eq!(p.panes[0].role, "Coder");
+    assert!(
+        !p.steps.iter().any(|s| matches!(s, Step::SplitPane { .. })),
+        "a lone added pane is the root and is never split into existence"
+    );
+}
+
+#[test]
+fn dropping_everything_with_nothing_added_still_fails() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("solo").expect("template exists");
+    let err = plan(&LaunchRequest::new(project(), t).skip_pane(0), &reg).unwrap_err();
+    assert!(matches!(err, PlanError::NothingToLaunch), "got {err:?}");
+}
+
+#[test]
+fn two_coordinators_are_rejected_rather_than_silently_briefed() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("squad").expect("template exists");
+
+    // Force the invariant the toml normally guarantees.
+    let mut rogue = addable("lead");
+    rogue.coordinator = true;
+
+    let err = plan(&LaunchRequest::new(project(), t).add_pane(rogue), &reg).unwrap_err();
+    assert!(
+        matches!(err, PlanError::MultipleCoordinators { count: 2 }),
+        "got {err:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// template index vs compacted index
+// ---------------------------------------------------------------------------
+
+/// Regression: `PaneRef` shifts when a pane is dropped, but `skip` is keyed on
+/// TEMPLATE indices. A UI that fed the displayed index back into `skip` would
+/// drop the wrong teammate on the second removal.
+#[test]
+fn dropping_twice_removes_the_two_panes_the_user_actually_pointed_at() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("squad").expect("template exists");
+
+    let first = plan(&LaunchRequest::new(project(), t), &reg).expect("plans");
+    let coder1 = first
+        .panes
+        .iter()
+        .find(|p| p.role == "Coder 1")
+        .expect("squad has Coder 1");
+    let qa_origin = first
+        .panes
+        .iter()
+        .find(|p| p.role == "QA")
+        .and_then(|p| p.origin)
+        .expect("squad has QA");
+
+    // Drop Coder 1, then drop QA — using origins, as the UI must.
+    let after = plan(
+        &LaunchRequest::new(project(), t)
+            .skip_pane(coder1.origin.expect("template pane"))
+            .skip_pane(qa_origin),
+        &reg,
+    )
+    .expect("plans");
+
+    let roles: Vec<&str> = after.panes.iter().map(|p| p.role.as_str()).collect();
+    assert_eq!(roles, vec!["PM", "Coder 2"], "got {roles:?}");
+}
+
+#[test]
+fn origin_is_the_template_index_and_is_none_for_added_panes() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("squad").expect("template exists");
+
+    let p = plan(
+        &LaunchRequest::new(project(), t)
+            .skip_pane(1)
+            .add_pane(addable("tester")),
+        &reg,
+    )
+    .expect("plans");
+
+    // Compacted index 1 is template index 2 once pane 1 is dropped.
+    assert_eq!(p.panes[1].origin, Some(2));
+    assert_eq!(p.panes[0].origin, Some(0));
+    assert_eq!(
+        p.panes.last().expect("has panes").origin,
+        None,
+        "an added pane has no template index"
+    );
+}

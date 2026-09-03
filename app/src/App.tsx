@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import {
   api,
+  type AddableRole,
   type Cli,
   type FirstRunPane,
   type LaunchOptions,
@@ -9,19 +10,59 @@ import {
   type Plan,
   type PreflightReport,
   type Progress,
+  type ProjectStatus,
   type Template,
   type Workspace,
 } from "./api";
 
+// Vocabulary rule for everything user-visible in this file: no pane, template,
+// briefing, workspace, session or blocked. Teammate, team, instructions, folder,
+// "needs you". The backend keeps its own names; the translation happens here.
+
 type Step = "project" | "team" | "preflight" | "firstrun" | "launching" | "done";
 
-const STEPS: { id: Step; label: string }[] = [
-  { id: "project", label: "Project" },
-  { id: "team", label: "Team" },
-  { id: "preflight", label: "Check" },
-  { id: "firstrun", label: "First run" },
-  { id: "launching", label: "Launch" },
-  { id: "done", label: "Done" },
+const RECENTS_KEY = "herdup.recentProjects";
+const MAX_RECENTS = 4;
+
+/** Per-machine convenience only — never read back by the backend. */
+function readRecents(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? "[]");
+    return Array.isArray(raw) ? raw.filter((x) => typeof x === "string").slice(0, MAX_RECENTS) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberProject(path: string) {
+  try {
+    const next = [path, ...readRecents().filter((p) => p !== path)].slice(0, MAX_RECENTS);
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+  } catch {
+    /* private mode, cleared storage — the list is a nicety, not state we need */
+  }
+}
+
+const basename = (p: string) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
+
+/** The backend returns roles keyed by id, so they arrive alphabetically. Offer
+ *  them in the order a team is actually built up instead. */
+const ROLE_ORDER = ["lead", "coder", "tester", "builds", "research"];
+const ordered = <T extends { id: string }>(roles: T[]): T[] =>
+  [...roles].sort((a, b) => {
+    const ia = ROLE_ORDER.indexOf(a.id);
+    const ib = ROLE_ORDER.indexOf(b.id);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+/** Deterministic bar lengths per lane — random would shimmer on every render. */
+const BARS = [
+  [86, 62, 74, 40],
+  [70, 90, 52, 66],
+  [58, 78, 88, 46],
+  [92, 48, 68, 80],
+  [64, 84, 44, 72],
+  [76, 56, 82, 60],
 ];
 
 export default function App() {
@@ -29,12 +70,16 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [project, setProject] = useState("");
+  const [recents, setRecents] = useState<string[]>(readRecents);
+  const [status, setStatus] = useState<ProjectStatus | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [addable, setAddable] = useState<AddableRole[]>([]);
   const [clis, setClis] = useState<Cli[]>([]);
   const [templateId, setTemplateId] = useState("squad");
   const [skip, setSkip] = useState<number[]>([]);
   const [overrides, setOverrides] = useState<[number, string][]>([]);
+  const [extra, setExtra] = useState<string[]>([]);
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [report, setReport] = useState<PreflightReport | null>(null);
@@ -44,18 +89,36 @@ export default function App() {
   const [busy, setBusy] = useState(false);
 
   const options: LaunchOptions = useMemo(
-    () => ({ project, template: templateId, skip, overrides }),
-    [project, templateId, skip, overrides],
+    () => ({ project, template: templateId, skip, overrides, extra }),
+    [project, templateId, skip, overrides, extra],
   );
 
   useEffect(() => {
     api.listTemplates().then(setTemplates).catch((e) => setError(String(e)));
+    api.listAddableRoles().then(setAddable).catch(() => setAddable([]));
     api.listClis().then(setClis).catch((e) => setError(String(e)));
     api.listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([]));
     api.defaultProjectsRoot().then((root) => root && setProject((p) => p || root));
   }, []);
 
-  // Re-plan whenever the team shape changes, so the preview is never stale.
+  // The one warning belongs next to the choice that caused it, so version
+  // control is checked the moment a folder is picked — not three screens later.
+  useEffect(() => {
+    if (!project) {
+      setStatus(null);
+      return;
+    }
+    let live = true;
+    api
+      .projectStatus(project)
+      .then((s) => live && setStatus(s))
+      .catch(() => live && setStatus(null));
+    return () => {
+      live = false;
+    };
+  }, [project]);
+
+  // Re-plan whenever the team shape changes, so the picture is never stale.
   useEffect(() => {
     if (!project || !templateId) return;
     api.previewPlan(options).then(setPlan).catch((e) => setError(String(e)));
@@ -78,6 +141,12 @@ export default function App() {
       const chosen = await openDialog({ directory: true, title: "Choose a project" });
       if (typeof chosen === "string") setProject(chosen);
     });
+
+  const toTeam = () => {
+    rememberProject(project);
+    setRecents(readRecents());
+    setStep("team");
+  };
 
   const toPreflight = () =>
     guard(async () => {
@@ -106,7 +175,6 @@ export default function App() {
       }
     });
 
-  // Progress events stream in while the launch runs on a worker thread.
   useEffect(() => {
     const unlisten = api.onProgress((p) => setProgress((all) => [...all, p]));
     return () => {
@@ -114,25 +182,29 @@ export default function App() {
     };
   }, []);
 
-  const stepIndex = STEPS.findIndex((s) => s.id === step);
+  // Two dots for the two decisions; the later steps are consequences, not
+  // choices, so they do not add ticks the user has to account for.
+  const dot = step === "project" ? 1 : 2;
 
   return (
     <div className="app">
-      <header>
-        <h1>herdup</h1>
-        <ol className="steps">
-          {STEPS.map((s, i) => (
-            <li key={s.id} className={i === stepIndex ? "on" : i < stepIndex ? "past" : ""}>
-              {s.label}
-            </li>
-          ))}
-        </ol>
-      </header>
+      <div className="topbar">
+        <span className="mark">herdup</span>
+        <span className="dots" aria-hidden>
+          <i className={dot === 1 ? "on" : "done"} />
+          <i className={dot === 2 ? "on" : ""} />
+        </span>
+      </div>
 
       {error && (
-        <div className="error" role="alert" data-testid="error">
+        <div className="errbox" role="alert" data-testid="error">
+          <strong>Something went wrong</strong>
           {error}
-          <button onClick={() => setError(null)}>dismiss</button>
+          <div className="actions">
+            <button className="btn" onClick={() => setError(null)}>
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
@@ -141,6 +213,8 @@ export default function App() {
           <ProjectStep
             project={project}
             setProject={setProject}
+            status={status}
+            recents={recents}
             pickFolder={pickFolder}
             workspaces={workspaces}
             onAttach={(w) =>
@@ -148,26 +222,27 @@ export default function App() {
                 await api.attachWorkspace(w.workspace_id, w.path);
               })
             }
-            onNext={() => setStep("team")}
+            onNext={toTeam}
             busy={busy}
           />
         )}
 
         {step === "team" && (
           <TeamStep
+            project={project}
             templates={templates}
-            clis={clis}
+            addable={addable}
+            plan={plan}
             templateId={templateId}
             setTemplateId={(id) => {
               setTemplateId(id);
               setSkip([]);
               setOverrides([]);
+              setExtra([]);
             }}
-            plan={plan}
-            skip={skip}
+            extra={extra}
+            setExtra={setExtra}
             setSkip={setSkip}
-            overrides={overrides}
-            setOverrides={setOverrides}
             onBack={() => setStep("project")}
             onNext={toPreflight}
             busy={busy}
@@ -181,8 +256,11 @@ export default function App() {
             onBack={() => setStep("team")}
             onNext={toFirstRunOrLaunch}
             busy={busy}
-            onSwitch={(index, cli) => setOverrides((o) => [...o.filter(([i]) => i !== index), [index, cli]])}
-            onDrop={(index) => setSkip((s) => [...s, index])}
+            clis={clis}
+            onSwitch={(origin, cli) =>
+              setOverrides((o) => [...o.filter(([i]) => i !== origin), [origin, cli]])
+            }
+            onDrop={(origin) => setSkip((s) => (s.includes(origin) ? s : [...s, origin]))}
           />
         )}
 
@@ -217,82 +295,156 @@ export default function App() {
 }
 
 // ---------------------------------------------------------------------------
+// 1 · which project
+// ---------------------------------------------------------------------------
 
 function ProjectStep(props: {
   project: string;
   setProject: (p: string) => void;
+  status: ProjectStatus | null;
+  recents: string[];
   pickFolder: () => void;
   workspaces: Workspace[];
   onAttach: (w: Workspace) => void;
   onNext: () => void;
   busy: boolean;
 }) {
+  const s = props.status;
+  // Quiet unless risky: a folder under version control with a way back says
+  // nothing at all. Only a genuinely un-undoable choice speaks up.
+  const risky = s?.exists && !s.versioned;
+  const dirty = s?.exists && s.versioned && s.uncommitted > 0;
+
   return (
     <section>
-      <h2>Which project?</h2>
-      <div className="row">
-        <input
-          value={props.project}
-          onChange={(e) => props.setProject(e.target.value)}
-          placeholder="path to a project folder"
-          spellCheck={false}
-          data-testid="project-input"
-        />
-        <button onClick={props.pickFolder} disabled={props.busy}>
-          Browse…
+      <h1>Put a team of AIs on your code.</h1>
+      <p className="lede">
+        They read it, change it, and tell you what they did. You stay in charge.
+      </p>
+
+      <div className="label">Which project</div>
+      <div className="list">
+        {props.recents.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className="pick"
+            aria-pressed={p === props.project}
+            onClick={() => props.setProject(p)}
+          >
+            <span className="mk" aria-hidden />
+            <span className="nm">{basename(p)}</span>
+            <span className="pt">{p}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className="pick browse"
+          data-testid="browse"
+          onClick={props.pickFolder}
+          disabled={props.busy}
+        >
+          <span className="mk" aria-hidden />
+          <span className="nm">Choose a folder…</span>
         </button>
       </div>
 
-      <NewRepoPanel setProject={props.setProject} />
+      {/* The path stays editable, but demoted: it is no longer the first thing
+          a newcomer meets. */}
+      <div className="row" style={{ marginTop: 10 }}>
+        <input
+          value={props.project}
+          onChange={(e) => props.setProject(e.target.value)}
+          placeholder="or type a path"
+          spellCheck={false}
+          aria-label="Project folder"
+          data-testid="project-input"
+        />
+      </div>
 
-      <h3>Already running in herdup's session</h3>
-      {props.workspaces.length === 0 ? (
-        <p className="muted">
-          Nothing running yet. herdup uses its own herdr session, so it never touches
-          workspaces you started yourself.
-        </p>
-      ) : (
-        <ul className="list">
-          {props.workspaces.map((w) => (
-            <li key={w.workspace_id} data-testid={`workspace-${w.workspace_id}`}>
-              <strong>{w.label}</strong>
-              <span className="muted">
-                {w.pane_count} pane(s)
-                {w.path ? ` · ${w.path}` : ""}
-              </span>
-              {w.blocked ? (
-                <span className="warn">a pane is waiting on you</span>
-              ) : (
-                <span className="muted">{w.agent_status}</span>
-              )}
-              {/* It is already running, so "attach" is the whole action. */}
-              <button
-                data-testid={`attach-${w.workspace_id}`}
-                onClick={() => props.onAttach(w)}
-              >
-                Attach
-              </button>
-              {w.path && (
-                <button
-                  data-testid={`use-folder-${w.workspace_id}`}
-                  onClick={() => props.setProject(w.path!)}
-                >
-                  Use this folder
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+      {risky && (
+        <div className="warnbox" data-testid="warn-unversioned">
+          <span className="ic" aria-hidden>
+            ▲
+          </span>
+          <div>
+            <strong>{s!.name} has no version history</strong>
+            <p>
+              If they change something you don&apos;t like, there&apos;s no way back. Setting up
+              git first gives you an undo.
+            </p>
+          </div>
+        </div>
+      )}
+      {dirty && (
+        <div className="warnbox" data-testid="warn-uncommitted">
+          <span className="ic" aria-hidden>
+            ▲
+          </span>
+          <div>
+            <strong className="num">
+              {s!.uncommitted} unsaved change{s!.uncommitted === 1 ? "" : "s"} in {s!.name}
+            </strong>
+            <p>
+              Their edits will mix into work you haven&apos;t committed
+              {s!.branch ? ` on ${s!.branch}` : ""}, so undo gets messy. Commit or stash first if
+              you want a clean way back.
+            </p>
+          </div>
+        </div>
       )}
 
-      <div className="actions">
+      <NewRepoPanel setProject={props.setProject} />
+
+      {props.workspaces.length > 0 && (
+        <>
+          <div className="label" style={{ marginTop: 22 }}>
+            Already running
+          </div>
+          <ul className="rows">
+            {props.workspaces.map((w) => (
+              <li key={w.workspace_id} data-testid={`workspace-${w.workspace_id}`}>
+                <strong>{w.label}</strong>
+                <span className="grow muted">
+                  {w.pane_count} teammate{w.pane_count === 1 ? "" : "s"}
+                  {w.path ? ` · ${w.path}` : ""}
+                </span>
+                {w.blocked ? (
+                  <span className="state warn">needs you</span>
+                ) : (
+                  <span className="state">{w.agent_status}</span>
+                )}
+                <button
+                  className="btn"
+                  data-testid={`attach-${w.workspace_id}`}
+                  onClick={() => props.onAttach(w)}
+                >
+                  Open
+                </button>
+                {w.path && (
+                  <button
+                    className="btn quiet"
+                    data-testid={`use-folder-${w.workspace_id}`}
+                    onClick={() => props.setProject(w.path!)}
+                  >
+                    Use this folder
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <div style={{ marginTop: 22 }}>
         <button
-          className="primary"
+          className="go"
           data-testid="project-next"
           disabled={!props.project || props.busy}
           onClick={props.onNext}
         >
-          Next
+          Continue
+          <span aria-hidden>→</span>
         </button>
       </div>
     </section>
@@ -322,9 +474,9 @@ function NewRepoPanel(props: { setProject: (p: string) => void }) {
 
   if (!open) {
     return (
-      <p className="note">
+      <p className="muted" style={{ marginTop: 12 }}>
         Starting something new?{" "}
-        <button data-testid="new-repo-open" onClick={() => setOpen(true)}>
+        <button className="btn quiet" data-testid="new-repo-open" onClick={() => setOpen(true)}>
           Create a GitHub repository
         </button>
       </p>
@@ -352,18 +504,19 @@ function NewRepoPanel(props: { setProject: (p: string) => void }) {
   };
 
   return (
-    <div className="panel" data-testid="new-repo">
+    <div className="panel" data-testid="new-repo" style={{ marginTop: 12 }}>
       <header>
         <strong>New GitHub repository</strong>
-        <button onClick={() => setOpen(false)}>cancel</button>
+        <button className="btn quiet" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
       </header>
 
-      <div className="row" style={{ marginTop: 10 }}>
+      <div className="row">
         <select
           value={owner}
           data-testid="new-repo-owner"
           onChange={(e) => setOwner(e.target.value)}
-          style={{ flex: "none" }}
         >
           <option value="">(default account)</option>
           {owners.map((o) => (
@@ -391,7 +544,7 @@ function NewRepoPanel(props: { setProject: (p: string) => void }) {
         />
       </div>
 
-      <label className="ackbox" style={{ marginTop: 10, borderColor: isPublic ? undefined : "var(--line)" }}>
+      <label className="ack" style={{ marginTop: 10 }}>
         <input
           type="checkbox"
           data-testid="new-repo-public"
@@ -405,16 +558,20 @@ function NewRepoPanel(props: { setProject: (p: string) => void }) {
         </span>
       </label>
 
-      {problem && <div className="error" data-testid="new-repo-error">{problem}</div>}
+      {problem && (
+        <div className="errbox" data-testid="new-repo-error">
+          {problem}
+        </div>
+      )}
       {created && (
-        <p className="note" data-testid="new-repo-created">
+        <p className="muted" data-testid="new-repo-created">
           Created and cloned to <code>{created}</code>. It is now the selected project.
         </p>
       )}
 
       <div className="actions">
         <button
-          className="primary"
+          className="btn solid"
           data-testid="new-repo-create"
           disabled={!name || !into || busy || !!created}
           onClick={create}
@@ -426,155 +583,219 @@ function NewRepoPanel(props: { setProject: (p: string) => void }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 2 · who's on the team
+// ---------------------------------------------------------------------------
+
 function TeamStep(props: {
+  project: string;
   templates: Template[];
-  clis: Cli[];
+  addable: AddableRole[];
+  plan: Plan | null;
   templateId: string;
   setTemplateId: (id: string) => void;
-  plan: Plan | null;
-  skip: number[];
+  extra: string[];
+  setExtra: (f: (e: string[]) => string[]) => void;
   setSkip: (f: (s: number[]) => number[]) => void;
-  overrides: [number, string][];
-  setOverrides: (f: (o: [number, string][]) => [number, string][]) => void;
   onBack: () => void;
   onNext: () => void;
   busy: boolean;
 }) {
-  const setCli = (index: number, cli: string) =>
-    props.setOverrides((o) => [...o.filter(([i]) => i !== index), [index, cli]]);
+  const seg = useRef<HTMLDivElement>(null);
+  const panes = props.plan?.panes ?? [];
+  // The backend hands these back keyed by id, so they arrive alphabetically.
+  // A size picker has to read 1, 2, 4, 6.
+  const presets = useMemo(
+    () => [...props.templates].sort((a, b) => a.panes.length - b.panes.length),
+    [props.templates],
+  );
+
+  // The thumb travels to the active preset rather than cross-fading.
+  useLayoutEffect(() => {
+    const el = seg.current;
+    if (!el) return;
+    const thumb = el.querySelector<HTMLElement>(".thumb");
+    const active = el.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!thumb) return;
+    if (!active) {
+      thumb.style.opacity = "0";
+      return;
+    }
+    thumb.style.opacity = "1";
+    thumb.style.transform = `translateX(${active.offsetLeft - 3}px)`;
+    thumb.style.width = `${active.offsetWidth}px`;
+  }, [props.templateId, props.templates.length, props.extra.length]);
+
+  /// Removing a teammate: a template pane goes into `skip` by its ORIGIN (the
+  /// compacted index shifts and would drop the wrong one); an added pane is
+  /// removed from `extra` by position among the added panes.
+  const removeAt = (paneIndex: number) => {
+    const pane = panes[paneIndex];
+    if (!pane) return;
+    if (pane.origin !== null) {
+      props.setSkip((s) => (s.includes(pane.origin!) ? s : [...s, pane.origin!]));
+      return;
+    }
+    const addedBefore = panes.slice(0, paneIndex).filter((p) => p.origin === null).length;
+    props.setExtra((e) => e.filter((_, i) => i !== addedBefore));
+  };
+
+  const current = presets.find((t) => t.id === props.templateId);
+  // A hand-edited line-up no longer matches its preset, so say so rather than
+  // leaving a preset highlighted that no longer describes the team.
+  const edited = props.extra.length > 0 || (current && panes.length !== current.panes.length);
+  const hasLead = panes.some((p) => p.coordinator);
 
   return (
     <section>
-      <h2>Which team?</h2>
-      <div className="cards">
-        {props.templates.map((t) => (
+      <button className="back" type="button" data-testid="back" onClick={props.onBack}>
+        <span aria-hidden>←</span>
+        <span className="nm">{basename(props.project)}</span>
+        <span className="ch">Change</span>
+      </button>
+
+      {/* The picture of what you're about to get. */}
+      <div className="label">Your workspace</div>
+      <div className="stage">
+        <div className="chrome" aria-hidden>
+          <i />
+          <i />
+          <i />
+          <span className="t">{basename(props.project)}</span>
+        </div>
+        {panes.length === 0 ? (
+          <div className="stage-empty">Nobody on the team yet</div>
+        ) : (
+          <div className="lanes">
+            {panes.map((p, i) => (
+              <div
+                className={`lane${p.coordinator ? " lead" : ""}`}
+                key={`${p.role}-${i}`}
+                title={`${p.role} — ${p.cli_display}`}
+                data-testid={`lane-${i}`}
+              >
+                <span className="nm">{p.role}</span>
+                {BARS[i % BARS.length].map((w, n) => (
+                  <span className="bar" key={n} style={{ width: `${w}%` }} />
+                ))}
+                <button
+                  type="button"
+                  className="drop"
+                  aria-label={`Remove ${p.role}`}
+                  data-testid={`drop-${i}`}
+                  onClick={() => removeAt(i)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="label">Who&apos;s on it</div>
+      <div className="seg" ref={seg}>
+        <span className="thumb" aria-hidden />
+        {presets.map((t) => (
           <button
             key={t.id}
-            className={`card ${t.id === props.templateId ? "on" : ""}`}
+            type="button"
+            className="segbtn"
             data-testid={`template-${t.id}`}
+            aria-pressed={!edited && t.id === props.templateId}
             onClick={() => props.setTemplateId(t.id)}
           >
-            <strong>{t.display_name}</strong>
-            <span>{t.panes.length} pane(s)</span>
-            <span className="muted">{t.description}</span>
+            <span className="n">{t.panes.length}</span>
+            <span className="l">{t.display_name}</span>
+          </button>
+        ))}
+      </div>
+      <p className="pitch">
+        {edited
+          ? "Your own line-up — pick a size above to start over."
+          : (current?.description ?? "")}
+      </p>
+
+      <div className="add">
+        {ordered(props.addable).map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            className="btn"
+            title={r.summary}
+            data-testid={`add-${r.id}`}
+            // One lead per team; the backend rejects a second, so don't offer it.
+            disabled={r.id === "lead" && hasLead}
+            onClick={() => props.setExtra((e) => [...e, r.id])}
+          >
+            + {r.display_name}
           </button>
         ))}
       </div>
 
-      {props.plan && (
-        <>
-          <h3>Roles</h3>
-          <table className="grid">
-            <thead>
-              <tr>
-                <th>Role</th>
-                <th>CLI</th>
-                <th>Command</th>
-                <th>Briefing</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {props.plan.panes.map((p) => (
-                <tr key={p.index}>
-                  <td>
-                    {p.role}
-                    {p.coordinator && <span className="tag">coordinator</span>}
-                  </td>
-                  <td>
-                    <select value={p.cli} onChange={(e) => setCli(p.index, e.target.value)}>
-                      {props.clis.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <code>{p.command}</code>
-                    {p.dropped_flags && (
-                      <div className="warn">
-                        dropped <code>{p.dropped_flags}</code> — {p.cli_display} is not known to
-                        accept it
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    {p.auto_brief ? (
-                      <span className="ok">automatic</span>
-                    ) : (
-                      <span className="warn">waits for you</span>
-                    )}
-                  </td>
-                  <td>
-                    <button onClick={() => props.setSkip((s) => [...s, p.index])}>drop</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {props.plan.manual_briefings > 0 && (
-            <p className="note">
-              {props.plan.manual_briefings} pane(s) will not be briefed automatically. Those CLIs
-              have unverified blocked-detection, so herdup will not type into them unattended —
-              you release each briefing after looking at the pane.
-            </p>
-          )}
-          {props.skip.length > 0 && (
-            <p className="note">
-              {props.skip.length} pane(s) dropped.{" "}
-              <button onClick={() => props.setSkip(() => [])}>undo</button>
-            </p>
-          )}
-        </>
+      {props.plan && props.plan.manual_briefings > 0 && (
+        <p className="muted" style={{ marginBottom: 14 }}>
+          <span className="num">{props.plan.manual_briefings}</span> of them use a tool herdup
+          can&apos;t safely type into unattended, so you&apos;ll release those instructions yourself
+          after a look.
+        </p>
       )}
 
-      <div className="actions">
-        <button onClick={props.onBack}>Back</button>
-        <button
-          className="primary"
-          data-testid="team-next"
-          onClick={props.onNext}
-          disabled={props.busy}
-        >
-          Check environment
-        </button>
-      </div>
+      <button
+        className="go"
+        data-testid="team-next"
+        onClick={props.onNext}
+        disabled={props.busy || panes.length === 0}
+      >
+        Continue
+        <span aria-hidden>→</span>
+      </button>
+      <p className="note num">
+        {panes.length} teammate{panes.length === 1 ? "" : "s"} · they can read and change files in
+        that folder, nowhere else
+      </p>
     </section>
   );
 }
 
+// ---------------------------------------------------------------------------
+// 3 · the check. Not a designed screen — restyled and re-worded only.
+// ---------------------------------------------------------------------------
+
 function PreflightStep(props: {
   report: PreflightReport;
   plan: Plan | null;
+  clis: Cli[];
   onBack: () => void;
   onNext: () => void;
-  onSwitch: (index: number, cli: string) => void;
-  onDrop: (index: number) => void;
+  onSwitch: (origin: number, cli: string) => void;
+  onDrop: (origin: number) => void;
   busy: boolean;
 }) {
   const r = props.report;
-  // Warnings must be acknowledged individually. A launch puts agents with
+  // Warnings are acknowledged individually. A launch puts agents with
   // file-editing permissions into this folder; that should never be one click
   // away from a mistyped path.
   const [ack, setAck] = useState<Set<number>>(new Set());
   const allAcked = r.warnings.every((_, i) => ack.has(i));
+  const missing = r.clis.filter((c) => !c.installed);
 
   return (
     <section>
-      <h2>Environment</h2>
+      <button className="back" type="button" data-testid="back" onClick={props.onBack}>
+        <span aria-hidden>←</span>
+        <span className="nm">Back to the team</span>
+      </button>
 
-      <div className="confirm">
-        <div>
-          Launching <strong>{props.plan?.panes.length ?? 0} agent(s)</strong> into
-        </div>
-        <code>{r.project}</code>
-        {r.git_branch && <div className="muted">on branch {r.git_branch}</div>}
-      </div>
+      <h2>One last look</h2>
+      <p className="lede num">
+        About to start {props.plan?.panes.length ?? 0} teammate
+        {(props.plan?.panes.length ?? 0) === 1 ? "" : "s"} in {r.project}
+        {r.git_branch ? ` on ${r.git_branch}` : ""}.
+      </p>
 
       {r.warnings.map((w, i) => (
-        <label key={i} className="ackbox" data-testid={`warning-${i}`}>
+        <label key={i} className="ack" data-testid={`warning-${i}`}>
           <input
             type="checkbox"
             data-testid={`ack-${i}`}
@@ -582,7 +803,8 @@ function PreflightStep(props: {
             onChange={(e) =>
               setAck((s) => {
                 const next = new Set(s);
-                e.target.checked ? next.add(i) : next.delete(i);
+                if (e.target.checked) next.add(i);
+                else next.delete(i);
                 return next;
               })
             }
@@ -590,67 +812,10 @@ function PreflightStep(props: {
           <span>{w}</span>
         </label>
       ))}
-      <ul className="list">
-        <li>
-          <strong>{r.herdr}</strong>
-          <span className={r.herdr_ok ? "ok" : "warn"}>{r.herdr_ok ? "ok" : "problem"}</span>
-        </li>
-        {r.herdr_note && <li className="muted">{r.herdr_note}</li>}
-        {r.platform_note && (
-          <li className="muted" data-testid="platform-note">
-            {r.platform_note}
-          </li>
-        )}
-        <li>
-          <strong>GitHub CLI</strong>
-          <span className={r.gh_ready ? "ok" : "muted"}>
-            {r.gh_ready ? `ready${r.gh_account ? ` (${r.gh_account})` : ""}` : r.gh_blocker}
-          </span>
-        </li>
-      </ul>
-
-      <h3>Agent CLIs</h3>
-      <ul className="list">
-        {r.clis.map((c) => (
-          <li key={c.id}>
-            <strong>{c.display_name}</strong>
-            {c.installed ? (
-              <span className="ok">
-                found <code>{c.resolved}</code>
-                {c.first_run_done ? " · first run done" : " · first run needed"}
-              </span>
-            ) : (
-              <span className="warn">
-                not found (looked for <code>{c.binary}</code>)
-                {c.install_command && (
-                  <div>
-                    install: <code>{c.install_command}</code>
-                  </div>
-                )}
-                {c.alternatives.length > 0 && props.plan && (
-                  <div className="fixes">
-                    {props.plan.panes
-                      .filter((p) => p.cli === c.id)
-                      .map((p) => (
-                        <span key={p.index}>
-                          {p.role}:
-                          <button onClick={() => props.onSwitch(p.index, c.alternatives[0])}>
-                            switch to {c.alternatives[0]}
-                          </button>
-                          <button onClick={() => props.onDrop(p.index)}>drop pane</button>
-                        </span>
-                      ))}
-                  </div>
-                )}
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
 
       {r.blocking.length > 0 && (
-        <div className="error" data-testid="blocking">
-          <strong>Resolve before launching:</strong>
+        <div className="errbox" data-testid="blocking">
+          <strong>Fix these before starting</strong>
           <ul>
             {r.blocking.map((b) => (
               <li key={b}>{b}</li>
@@ -659,21 +824,76 @@ function PreflightStep(props: {
         </div>
       )}
 
-      <div className="actions">
-        <button onClick={props.onBack}>Back</button>
-        <button
-          className="primary"
-          data-testid="preflight-next"
-          onClick={props.onNext}
-          disabled={!r.can_launch || !allAcked || props.busy}
-        >
-          {r.needs_first_run.length > 0 ? "Start first run" : "Launch"}
-        </button>
-        {!allAcked && <span className="muted">acknowledge the warnings above to continue</span>}
-      </div>
+      {/* Quiet unless risky: a healthy environment shows one line, not a table. */}
+      {missing.length === 0 && r.herdr_ok ? (
+        <p className="state ok" style={{ marginBottom: 14 }}>
+          Everything they need is installed
+        </p>
+      ) : (
+        <ul className="rows">
+          {!r.herdr_ok && (
+            <li>
+              <strong>herdr</strong>
+              <span className="grow muted">{r.herdr_note ?? r.herdr}</span>
+              <span className="state warn">problem</span>
+            </li>
+          )}
+          {missing.map((c) => (
+            <li key={c.id}>
+              <strong>{c.display_name}</strong>
+              <span className="grow muted">
+                not installed
+                {c.install_command ? (
+                  <>
+                    {" · "}
+                    <code>{c.install_command}</code>
+                  </>
+                ) : null}
+              </span>
+              {c.alternatives.length > 0 &&
+                props.plan?.panes
+                  .filter((p) => p.cli === c.id && p.origin !== null)
+                  .map((p) => (
+                    <span key={p.index} className="actions" style={{ marginTop: 0 }}>
+                      <button
+                        className="btn"
+                        onClick={() => props.onSwitch(p.origin!, c.alternatives[0])}
+                      >
+                        {p.role}: use {c.alternatives[0]}
+                      </button>
+                      <button className="btn quiet" onClick={() => props.onDrop(p.origin!)}>
+                        drop
+                      </button>
+                    </span>
+                  ))}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {r.platform_note && (
+        <p className="muted" data-testid="platform-note">
+          {r.platform_note}
+        </p>
+      )}
+
+      <button
+        className="go"
+        data-testid="preflight-next"
+        onClick={props.onNext}
+        disabled={!r.can_launch || !allAcked || props.busy}
+      >
+        {r.needs_first_run.length > 0 ? "Set up access" : "Start working"}
+        <span aria-hidden>→</span>
+      </button>
+      {!allAcked && <p className="note">Tick the boxes above to continue.</p>}
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// 4 · first run, re-worded as "approve access"
+// ---------------------------------------------------------------------------
 
 function FirstRunStep(props: {
   panes: FirstRunPane[];
@@ -698,14 +918,13 @@ function FirstRunStep(props: {
 
   return (
     <section>
-      <h2>First run</h2>
-      <p className="note">
-        Each CLI gets one bare pane in your project so logins and first-run “trust this folder”
-        prompts are cleared before the team is built. Answer them in the terminal; this updates as
-        you go.
+      <h2>Approve access</h2>
+      <p className="lede">
+        Each tool asks once whether it may work in this folder. Answer in the terminal — this
+        updates as you go.
       </p>
-      <div className="actions">
-        <button onClick={() => api.openTerminal(props.project).catch(() => {})}>
+      <div className="actions" style={{ marginTop: 0, marginBottom: 16 }}>
+        <button className="btn" onClick={() => api.openTerminal(props.project).catch(() => {})}>
           Open terminal
         </button>
       </div>
@@ -714,21 +933,25 @@ function FirstRunStep(props: {
         <div key={p.cli} className="panel">
           <header>
             <strong>{p.display_name}</strong>
-            <span className={p.state === "verified" ? "ok" : "warn"}>
+            <span
+              className={`state ${p.state === "verified" ? "ok" : p.state === "needs_you" ? "warn" : "busy"}`}
+            >
               {p.state === "verified"
                 ? "ready"
                 : p.state === "needs_you"
-                  ? "waiting for you"
-                  : "starting…"}
+                  ? "needs you"
+                  : "starting"}
             </span>
           </header>
           {p.hints.length > 0 && (
-            <ul className="hints">
+            <ul className="rows" style={{ marginBottom: 0 }}>
               {p.hints.map((h) => (
                 <li key={h.value}>
                   <span className="tag">{h.kind}</span>
-                  <code>{h.value}</code>
-                  <button onClick={() => navigator.clipboard.writeText(h.value)}>copy</button>
+                  <code className="grow">{h.value}</code>
+                  <button className="btn quiet" onClick={() => navigator.clipboard.writeText(h.value)}>
+                    Copy
+                  </button>
                 </li>
               ))}
             </ul>
@@ -737,39 +960,45 @@ function FirstRunStep(props: {
         </div>
       ))}
 
-      <div className="actions">
-        <button className="primary" onClick={props.onDone} disabled={props.busy}>
-          {allDone ? "Build the team" : "Skip and build anyway"}
-        </button>
-      </div>
+      <button className="go" onClick={props.onDone} disabled={props.busy} style={{ marginTop: 16 }}>
+        {allDone ? "Start working" : "Skip and start anyway"}
+        <span aria-hidden>→</span>
+      </button>
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// 5 · launching
+// ---------------------------------------------------------------------------
 
 function LaunchingStep(props: { progress: Progress[] }) {
   const last = props.progress.filter((p) => p.kind === "step").at(-1);
   const pct = last?.total ? Math.round(((last.index ?? 0) / last.total) * 100) : 0;
   return (
     <section>
-      <h2>Building the team</h2>
-      <div className="bar">
+      <h2>Getting everyone started</h2>
+      <p className="lede">This usually takes about twenty seconds.</p>
+      <div className="bar-track">
         <div style={{ width: `${pct}%` }} />
       </div>
       <ul className="log">
         {props.progress
           .filter((p) => p.kind !== "step")
           .map((p, i) => (
-            <li key={i} className={p.kind}>
-              <span className="tag">{p.kind.replace(/_/g, " ")}</span>
-              {p.role && <strong>{p.role}</strong>}
-              {p.detail && <span className="muted">{p.detail}</span>}
+            <li key={i}>
+              {p.role && <strong style={{ color: "var(--ink)" }}>{p.role}</strong>}
+              <span>{p.detail ?? p.kind.replace(/_/g, " ")}</span>
             </li>
           ))}
       </ul>
-      {last?.detail && <p className="muted">{last.detail}</p>}
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// 6 · done
+// ---------------------------------------------------------------------------
 
 function DoneStep(props: {
   outcome: Outcome;
@@ -784,55 +1013,60 @@ function DoneStep(props: {
       .then(props.setOutcome)
       .catch((e) => props.setError(String(e)));
 
+  const needing = o.panes.filter((p) => p.state === "needs_attention" || p.has_pending_briefing);
+
   return (
     <section>
       <h2>
-        {o.briefed} of {o.panes.length} pane(s) briefed
+        {o.failure
+          ? "Stopped partway"
+          : needing.length === 0
+            ? "Your team is working"
+            : "Your team is up — some need you"}
       </h2>
 
       {o.failure && (
-        <div className="error">
-          <strong>Stopped:</strong> {o.failed_step}
-          <div>{o.failure}</div>
-          <p className="muted">
-            Earlier panes were left running on purpose — they may hold real work.
+        <div className="errbox">
+          <strong>{o.failed_step}</strong>
+          {o.failure}
+          <p style={{ margin: "8px 0 0" }}>
+            The ones already started were left running on purpose — they may hold real work.
           </p>
         </div>
       )}
 
-      <ul className="list">
+      <ul className="rows">
         {o.panes.map((p) => (
           <li key={p.index}>
             <strong>{p.role}</strong>
-            <span className="muted">
-              {p.agent_name ?? "—"} · {p.pane_id ?? "not created"}
-            </span>
+            <span className="grow muted">{p.cli_display}</span>
             {p.state === "briefed" ? (
-              <span className="ok">briefed</span>
+              <span className="state ok">working</span>
             ) : p.state === "needs_attention" ? (
-              <span className="warn">{p.reason}</span>
+              <span className="state warn">{p.reason ?? "needs you"}</span>
             ) : (
-              <span className="muted">{p.state.replace(/_/g, " ")}</span>
+              <span className="state">{p.state.replace(/_/g, " ")}</span>
             )}
             {p.has_pending_briefing && (
-              <button onClick={() => release(p.index)}>Send briefing now</button>
+              <button className="btn solid" onClick={() => release(p.index)}>
+                Send instructions
+              </button>
             )}
             {p.screen && p.state === "needs_attention" && <pre className="screen">{p.screen}</pre>}
           </li>
         ))}
       </ul>
 
-      <div className="actions">
-        <button
-          className="primary"
-          onClick={() =>
-            api.openTerminal(props.project).catch((e) => props.setError(String(e)))
-          }
-        >
-          Open terminal
-        </button>
-        <code>herdr --session {o.session}</code>
-      </div>
+      <button
+        className="go"
+        onClick={() => api.openTerminal(props.project).catch((e) => props.setError(String(e)))}
+      >
+        Open the team
+        <span aria-hidden>→</span>
+      </button>
+      <p className="note">
+        Or run <code>herdr --session {o.session}</code> yourself.
+      </p>
     </section>
   );
 }

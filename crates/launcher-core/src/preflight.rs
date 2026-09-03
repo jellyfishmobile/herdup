@@ -445,6 +445,13 @@ fn check_clis(
 ///
 /// Best-effort and read-only: `git` may be absent, and a failure here must never
 /// stop a launch — it only means we cannot warn.
+///
+/// Public because the launcher shows the "nothing can be undone" warning at the
+/// moment a project is chosen, which is long before the full preflight runs.
+pub fn git_status(project: &Path) -> GitStatus {
+    check_git(project)
+}
+
 fn check_git(project: &Path) -> GitStatus {
     if !project.is_dir() {
         return GitStatus::default();

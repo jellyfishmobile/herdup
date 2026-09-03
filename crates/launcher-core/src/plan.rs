@@ -23,6 +23,9 @@ pub enum PlanError {
 
     #[error("cannot skip pane {index}: the template only has {count} panes")]
     SkipOutOfRange { index: usize, count: usize },
+
+    #[error("a team may have at most one coordinator, but this plan has {count}")]
+    MultipleCoordinators { count: usize },
 }
 
 pub type Result<T> = std::result::Result<T, PlanError>;
@@ -194,6 +197,12 @@ pub enum Step {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlannedPane {
     pub pane: PaneRef,
+    /// Index of this pane in the *template*, or `None` if the user added it.
+    ///
+    /// [`PaneRef`] is the compacted index and shifts whenever a pane is dropped,
+    /// so anything that feeds back into `skip` or `cli_overrides` — both of
+    /// which are keyed on template indices — must use this instead.
+    pub origin: Option<usize>,
     pub role: String,
     pub cli: String,
     pub cli_display: String,
@@ -324,6 +333,12 @@ pub struct LaunchRequest<'a> {
     pub skip: BTreeSet<usize>,
     /// Template pane index -> replacement CLI id, e.g. swapping codex for claude.
     pub cli_overrides: BTreeMap<usize, String>,
+    /// Panes added beyond the template, in the order the user added them.
+    ///
+    /// Each attaches to the root pane. These carry no original template index,
+    /// so `cli_overrides` never applies to them — an added pane already names
+    /// the CLI the user chose.
+    pub extra: Vec<PaneSpec>,
     pub await_timeout_ms: u64,
 }
 
@@ -335,12 +350,19 @@ impl<'a> LaunchRequest<'a> {
             workspace_label: None,
             skip: BTreeSet::new(),
             cli_overrides: BTreeMap::new(),
+            extra: Vec::new(),
             await_timeout_ms: 30_000,
         }
     }
 
     pub fn skip_pane(mut self, index: usize) -> Self {
         self.skip.insert(index);
+        self
+    }
+
+    /// Add a pane beyond the template's own.
+    pub fn add_pane(mut self, spec: PaneSpec) -> Self {
+        self.extra.push(spec);
         self
     }
 
@@ -366,17 +388,25 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
         });
     }
 
-    let kept = compact(template, &request.skip)?;
+    let kept = compact(template, &request.extra, &request.skip)?;
+
+    // At most one coordinator: its briefing is the only one that names the
+    // finished roster, and two of them would each claim to run the team.
+    let coordinators = kept.iter().filter(|k| k.spec.coordinator).count();
+    if coordinators > 1 {
+        return Err(PlanError::MultipleCoordinators {
+            count: coordinators,
+        });
+    }
 
     // Resolve every CLI before emitting anything, so a bad reference fails the
     // whole plan rather than producing a half-usable one.
     let mut panes = Vec::with_capacity(kept.len());
     let mut used_names: Vec<String> = Vec::new();
     for (new_index, k) in kept.iter().enumerate() {
-        let cli_id = request
-            .cli_overrides
-            .get(&k.original_index)
-            .cloned()
+        let cli_id = k
+            .original_index
+            .and_then(|i| request.cli_overrides.get(&i).cloned())
             .unwrap_or_else(|| k.spec.cli.clone());
         let entry = registry.get(&cli_id).ok_or_else(|| PlanError::UnknownCli {
             role: k.spec.role.clone(),
@@ -417,6 +447,7 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
 
         panes.push(PlannedPane {
             pane: PaneRef(new_index),
+            origin: k.original_index,
             role: k.spec.role.clone(),
             cli: cli_id,
             cli_display: entry.display_name.clone(),
@@ -521,7 +552,9 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
 
 /// A kept pane, with its split remapped onto the compacted index space.
 struct Kept<'a> {
-    original_index: usize,
+    /// `None` for a pane the user added, which has no template index and so is
+    /// never touched by `cli_overrides`.
+    original_index: Option<usize>,
     spec: &'a PaneSpec,
     /// `None` only for the new pane 0.
     split: Option<ResolvedSplit>,
@@ -534,12 +567,18 @@ struct ResolvedSplit {
     ratio: Option<f32>,
 }
 
-/// Drop skipped panes and re-point any split that referenced them.
+/// Drop skipped panes, re-point any split that referenced them, then append the
+/// user's added panes.
 ///
 /// Dropping a pane orphans its children, so each survivor is re-attached to its
 /// nearest surviving ancestor. If the original root is dropped, the first
-/// survivor becomes the new root and loses its split.
-fn compact<'a>(template: &'a Template, skip: &BTreeSet<usize>) -> Result<Vec<Kept<'a>>> {
+/// survivor becomes the new root and loses its split. Added panes always hang
+/// off the root, because the user placed no layout intent on them.
+fn compact<'a>(
+    template: &'a Template,
+    extra: &'a [PaneSpec],
+    skip: &BTreeSet<usize>,
+) -> Result<Vec<Kept<'a>>> {
     let parent: Vec<Option<usize>> = template
         .panes
         .iter()
@@ -549,7 +588,7 @@ fn compact<'a>(template: &'a Template, skip: &BTreeSet<usize>) -> Result<Vec<Kep
     let survivors: Vec<usize> = (0..template.panes.len())
         .filter(|i| !skip.contains(i))
         .collect();
-    if survivors.is_empty() {
+    if survivors.is_empty() && extra.is_empty() {
         return Err(PlanError::NothingToLaunch);
     }
 
@@ -586,7 +625,22 @@ fn compact<'a>(template: &'a Template, skip: &BTreeSet<usize>) -> Result<Vec<Kep
             })
         };
         out.push(Kept {
-            original_index: old,
+            original_index: Some(old),
+            spec,
+            split,
+        });
+    }
+
+    // Added panes come last and hang off the root — except when every template
+    // pane was dropped, in which case the first added pane becomes the root.
+    for spec in extra {
+        let split = (!out.is_empty()).then_some(ResolvedSplit {
+            from: 0,
+            direction: SplitDirection::Right,
+            ratio: None,
+        });
+        out.push(Kept {
+            original_index: None,
             spec,
             split,
         });

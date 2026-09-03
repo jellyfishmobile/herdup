@@ -94,6 +94,11 @@ class Session {
   async source() {
     return call("GET", this.#p("/source"));
   }
+
+  /// Base64 PNG of the current window, for eyeballing the real app.
+  async screenshot() {
+    return call("GET", this.#p("/screenshot"));
+  }
 }
 
 class Element {

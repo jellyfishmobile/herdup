@@ -132,10 +132,10 @@ async function main() {
   // -- 3. an unversioned folder warns and gates ---------------------------
   console.log("\n[3] a folder with no version control");
   const nogit = makeUnversionedFolder();
-  await (await session.waitFor("main section .actions button")).click(); // Back
+  await (await session.waitFor('[data-testid="back"]')).click(); // Back
   await session.waitFor('[data-testid="step-team"]');
   // Back again to the project step.
-  await (await session.waitFor("main section .actions button")).click();
+  await (await session.waitFor('[data-testid="back"]')).click();
   await setProject(nogit);
   await (await session.waitFor('[data-testid="project-next"]')).click();
   await (await session.waitFor('[data-testid="team-next"]')).click();
@@ -160,9 +160,9 @@ async function main() {
   // -- 4. a clean repo produces no warnings -------------------------------
   console.log("\n[4] a clean git repository");
   const clean = makeCleanRepo();
-  await (await session.waitFor("main section .actions button")).click();
+  await (await session.waitFor('[data-testid="back"]')).click();
   await session.waitFor('[data-testid="step-team"]');
-  await (await session.waitFor("main section .actions button")).click();
+  await (await session.waitFor('[data-testid="back"]')).click();
   await setProject(clean);
   await (await session.waitFor('[data-testid="project-next"]')).click();
 
@@ -181,7 +181,34 @@ async function main() {
       fullBody.includes(r),
     ),
   );
-  check("the coordinator is marked", fullBody.includes("coordinator"));
+  // The word "coordinator" is deliberately gone from the UI — it is herdr
+  // vocabulary. The lead is now marked by its tinted lane instead, so assert
+  // the thing the user can actually see.
+  const leadLane = await session.find("main .lane.lead");
+  check("the lead is distinguished from the rest of the team", leadLane !== null);
+
+  // Removing a teammate must drop the one that was pointed at. The compacted
+  // index shifts after the first removal, so this is the case that used to
+  // silently drop the wrong role.
+  const beforeDrop = (await (await session.waitFor('[data-testid="step-team"]')).text()) ?? "";
+  await (await session.waitFor('[data-testid="drop-1"]')).click(); // Coder 1
+  await sleep(600);
+  await (await session.waitFor('[data-testid="drop-2"]')).click(); // QA, after the shift
+  await sleep(600);
+  const afterDrop = await (await session.waitFor('[data-testid="step-team"]')).text();
+  check(
+    "removing two teammates removes the two that were pointed at",
+    beforeDrop.includes("Coder 1") &&
+      !afterDrop.includes("Coder 1") &&
+      !afterDrop.includes("QA") &&
+      afterDrop.includes("Coder 2") &&
+      afterDrop.includes("BuildMaster"),
+    afterDrop.replace(/\s+/g, " ").slice(0, 160),
+  );
+
+  // Put the team back before the preflight assertions below.
+  await (await session.waitFor('[data-testid="template-full-team"]')).click();
+  await sleep(600);
 
   await (await session.waitFor('[data-testid="team-next"]')).click();
   await session.waitFor('[data-testid="step-preflight"]');

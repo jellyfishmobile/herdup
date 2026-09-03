@@ -73,6 +73,9 @@ pub struct WorkspaceDto {
 #[derive(Serialize)]
 pub struct PlannedPaneDto {
     index: usize,
+    /// Template index, or `null` for a pane the user added. Anything feeding
+    /// back into `skip`/`overrides` must use this, never `index`.
+    origin: Option<usize>,
     role: String,
     cli: String,
     cli_display: String,
@@ -170,6 +173,23 @@ pub struct HintDto {
     value: String,
 }
 
+#[derive(Serialize)]
+pub struct ProjectStatusDto {
+    exists: bool,
+    name: String,
+    versioned: bool,
+    branch: Option<String>,
+    uncommitted: usize,
+}
+
+#[derive(Serialize)]
+pub struct AddableRoleDto {
+    id: String,
+    display_name: String,
+    summary: String,
+    cli: String,
+}
+
 #[derive(Deserialize, Default)]
 pub struct LaunchOptions {
     project: String,
@@ -179,6 +199,12 @@ pub struct LaunchOptions {
     /// `[[index, cli_id], …]`
     #[serde(default)]
     overrides: Vec<(usize, String)>,
+    /// Ids of roles added beyond the template, in the order they were added.
+    ///
+    /// Ids only: the briefing text for each role lives in the core crate, so the
+    /// front end never supplies a prompt.
+    #[serde(default)]
+    extra: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +244,14 @@ fn build_plan(options: &LaunchOptions) -> Result<(LaunchPlan, Registry, Settings
     for (index, cli) in &options.overrides {
         request = request.override_cli(*index, cli);
     }
+    let addable = launcher_core::template::addable_roles();
+    for id in &options.extra {
+        let role = addable
+            .iter()
+            .find(|r| &r.id == id)
+            .ok_or_else(|| format!("no role '{id}' to add"))?;
+        request = request.add_pane(role.spec.clone());
+    }
     let plan = launcher_core::plan::plan(&request, &registry).map_err(|e| e.to_string())?;
     Ok((plan, registry, settings))
 }
@@ -247,6 +281,48 @@ fn list_templates() -> Result<Vec<TemplateDto>, String> {
                 .collect(),
         })
         .collect())
+}
+
+/// Cheap, read-only look at a folder, for the moment a project is chosen.
+///
+/// Deliberately much lighter than [`run_preflight`]: it touches git and the
+/// filesystem only, so the launcher can warn about an un-undoable folder the
+/// instant it is picked rather than three screens later.
+#[tauri::command]
+async fn project_status(project: String) -> Result<ProjectStatusDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = PathBuf::from(&project);
+        let exists = path.is_dir();
+        let git = launcher_core::preflight::git_status(&path);
+        ProjectStatusDto {
+            exists,
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| project.clone()),
+            versioned: git.is_repo,
+            branch: git.branch,
+            uncommitted: git.dirty_files,
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// The roles the user may add on top of a template.
+///
+/// The UI renders these as the "add someone" controls and sends back ids only.
+#[tauri::command]
+fn list_addable_roles() -> Vec<AddableRoleDto> {
+    launcher_core::template::addable_roles()
+        .into_iter()
+        .map(|r| AddableRoleDto {
+            id: r.id,
+            display_name: r.display_name,
+            summary: r.summary,
+            cli: r.spec.cli,
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -325,6 +401,7 @@ fn plan_dto(plan: &LaunchPlan) -> PlanDto {
             .iter()
             .map(|p| PlannedPaneDto {
                 index: p.pane.0,
+                origin: p.origin,
                 role: p.role.clone(),
                 cli: p.cli.clone(),
                 cli_display: p.cli_display.clone(),
@@ -808,6 +885,8 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             list_templates,
+            list_addable_roles,
+            project_status,
             list_clis,
             list_workspaces,
             preview_plan,

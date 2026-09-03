@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 const BUILTIN: &str = include_str!("../assets/templates.toml");
+const ADDABLE: &str = include_str!("../assets/addable.toml");
 
 /// Where a pane comes from, relative to panes created before it.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
@@ -101,6 +102,65 @@ struct RawTemplate {
     display_name: String,
     description: String,
     pane: Vec<PaneSpec>,
+}
+
+/// A role the user can add to a team beyond whatever its template supplies.
+///
+/// The briefing lives in `addable.toml`, never in the UI: the front end sends a
+/// role id and nothing else, so no prompt text is ever invented by the client.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AddableRole {
+    pub id: String,
+    pub display_name: String,
+    /// One line a newcomer can read, e.g. "Writes and changes code".
+    pub summary: String,
+    pub spec: PaneSpec,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawAddable {
+    display_name: String,
+    summary: String,
+    role: String,
+    cli: String,
+    #[serde(default)]
+    flags: String,
+    briefing: String,
+}
+
+/// The roles herdup lets you add, in file order.
+///
+/// An added pane is never the coordinator — a team has at most one, and it comes
+/// from the template — and never carries a split, since [`crate::plan`] attaches
+/// extras to the root pane itself.
+pub fn addable_roles() -> Vec<AddableRole> {
+    parse_addable(ADDABLE, "built-in addable.toml")
+        .expect("the built-in addable roles must always parse; this is a build-time bug")
+}
+
+fn parse_addable(text: &str, file: &str) -> Result<Vec<AddableRole>> {
+    let raw: BTreeMap<String, RawAddable> =
+        toml::from_str(text).map_err(|source| ConfigError::Toml {
+            file: file.to_string(),
+            source,
+        })?;
+    Ok(raw
+        .into_iter()
+        .map(|(id, r)| AddableRole {
+            id,
+            display_name: r.display_name,
+            summary: r.summary,
+            spec: PaneSpec {
+                role: r.role,
+                cli: r.cli,
+                flags: r.flags,
+                briefing: r.briefing,
+                coordinator: false,
+                split: None,
+            },
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Default)]
