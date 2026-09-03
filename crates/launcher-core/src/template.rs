@@ -183,6 +183,105 @@ pub fn parse_repo_team(
     Ok(template)
 }
 
+/// A team as `.herdr/team.toml`, in the bare shape [`parse_repo_team`] reads.
+///
+/// Hand-written rather than serialised: this file is committed, read and
+/// edited by people, and a serialiser would put every briefing on one escaped
+/// line. Field order is fixed so a re-save produces a readable diff.
+pub fn to_repo_toml(team: &Template) -> String {
+    let mut out = String::new();
+    out.push_str("# Written by herdup from a launched team. Edit freely.\n");
+    out.push_str("# herdup offers this team when the project is opened.\n\n");
+    out.push_str(&format!(
+        "display_name = {}\n",
+        basic_string(&team.display_name)
+    ));
+    out.push_str(&format!(
+        "description  = {}\n",
+        basic_string(&team.description)
+    ));
+    for pane in &team.panes {
+        out.push_str("\n[[pane]]\n");
+        out.push_str(&format!("role     = {}\n", basic_string(&pane.role)));
+        out.push_str(&format!("cli      = {}\n", basic_string(&pane.cli)));
+        if !pane.flags.trim().is_empty() {
+            out.push_str(&format!("flags    = {}\n", basic_string(pane.flags.trim())));
+        }
+        if pane.coordinator {
+            out.push_str("coordinator = true\n");
+        }
+        if let Some(split) = &pane.split {
+            let direction = match split.direction {
+                SplitDirection::Right => "right",
+                SplitDirection::Down => "down",
+            };
+            match split.ratio {
+                Some(ratio) => out.push_str(&format!(
+                    "split    = {{ direction = \"{direction}\", ratio = {ratio}, from = {} }}\n",
+                    split.from
+                )),
+                None => out.push_str(&format!(
+                    "split    = {{ direction = \"{direction}\", from = {} }}\n",
+                    split.from
+                )),
+            }
+        }
+        out.push_str(&format!("briefing = {}\n", briefing_string(&pane.briefing)));
+    }
+    out
+}
+
+/// A TOML basic string: always correct, always one line.
+fn basic_string(text: &str) -> String {
+    toml::Value::String(text.to_string()).to_string()
+}
+
+/// A briefing as a multi-line string when that is safe, else escaped.
+///
+/// Multi-line keeps a paragraph readable in the committed file. Text holding a
+/// backslash or a triple quote cannot go in one without escaping rules that
+/// are easy to get subtly wrong, so it falls back to the always-correct form.
+fn briefing_string(text: &str) -> String {
+    if text.contains('\\') || text.contains("\"\"\"") || text.ends_with('"') {
+        return basic_string(text);
+    }
+    // A leading newline directly after the opening delimiter is trimmed by
+    // TOML, so text that starts with one would lose it: use the escaped form.
+    if text.starts_with('\n') {
+        return basic_string(text);
+    }
+    format!("\"\"\"\n{text}\"\"\"")
+}
+
+/// What a save did, so the caller can ask before replacing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SaveOutcome {
+    Written(std::path::PathBuf),
+    /// The file is already there and `overwrite` was false. Nothing was read
+    /// from it and nothing was written.
+    Exists(std::path::PathBuf),
+}
+
+/// Write `team` to `<project>/.herdr/team.toml`.
+///
+/// Refuses an existing file unless `overwrite`, because that file may be
+/// committed and hand-edited. Creates `.herdr` when it is missing.
+pub fn save_repo_team(
+    project: &Path,
+    team: &Template,
+    overwrite: bool,
+) -> std::io::Result<SaveOutcome> {
+    let path = project.join(REPO_TEAM_FILE);
+    if !overwrite && path.exists() {
+        return Ok(SaveOutcome::Exists(path));
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&path, to_repo_toml(team))?;
+    Ok(SaveOutcome::Written(path))
+}
+
 /// A role the user can add to a team beyond whatever its template supplies.
 ///
 /// The briefing lives in `addable.toml`, never in the UI: the front end sends a
