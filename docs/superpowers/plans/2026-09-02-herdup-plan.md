@@ -484,10 +484,26 @@ settings round trip. The Tauri layer is verified by QA against a local feed.
 
 **Exit — BUILT 2026-09-03; SEE CHECKBOXES.**
 
-- [ ] macOS end to end against a local feed: banner, install with progress,
-      restart into the new version, tamper refused, silent when the feed 404s.
+- [x] macOS end to end against a local feed, by QA and then by the user
+      (2026-09-03): the banner appeared four seconds after launch; Install
+      showed download progress; the app restarted into 0.1.1 with a valid
+      ad-hoc signature and no quarantine flag; a tampered download was refused
+      with "the download did not verify; nothing was installed" and the app
+      stayed at 0.1.0; the startup check against the real feed (private repo,
+      404) stayed silent; the manual check said "could not check: no published
+      release"; the top bar showed the running version, v0.1.0.
+- [ ] The translocation text — a copy opened straight from the disk image told
+      to move to Applications — pending.
 - [ ] Windows: unverified — no Windows machine in this effort.
+- [ ] Linux: unverified — the build has not been run by a human.
 - [ ] First real signed release published and an installed copy updated from it.
+
+**Found while verifying:** the bundler only produces the macOS updater archive
+when `app` is an explicit bundle target. With only `dmg` listed it builds the
+`.app`, deletes it again and warns, leaving nothing for `latest.json` to point
+at. And a TOML key appended below a `[[verified]]` table belongs to that table,
+not to the document, so a hand-added `update_endpoint` must go at the top of
+`settings.toml`, before the first table header.
 
 ---
 
