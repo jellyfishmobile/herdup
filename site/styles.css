@@ -538,3 +538,15 @@ main section.direction { padding: 28px 24px 32px; }
   #iso { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .iso-svg { min-width: 660px; }
 }
+
+/* The circuit has to read as a circuit, so the edges are solid and directional
+   rather than a faint dashed scatter. */
+.iso-edge { stroke: color-mix(in srgb, var(--acc) 55%, var(--faint)); stroke-width: 2.5; stroke-dasharray: none; opacity: 0.55; }
+.iso-loop { fill: color-mix(in srgb, var(--acc) 9%, transparent); }
+.iso-packet { r: 8; }
+
+/* Light mode needs real separation between the faces or the slabs read flat. */
+.face.top { fill: color-mix(in srgb, var(--card) 78%, var(--ink) 22%); }
+.face.left { fill: color-mix(in srgb, var(--card) 54%, var(--ink) 46%); }
+.face.right { fill: color-mix(in srgb, var(--card) 66%, var(--ink) 34%); }
+.face { stroke: color-mix(in srgb, var(--ink) 30%, transparent); }

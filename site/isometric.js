@@ -22,21 +22,21 @@
   const NODES = [
     {
       id: "channels",
-      x: 0, y: 0, h: 26,
+      x: 0, y: 0, h: 16,
       title: "Your client",
       sub: "WhatsApp · Telegram · Slack\nemail · shared docs",
       state: "planned",
     },
     {
       id: "inbox",
-      x: 2, y: 0, h: 34,
+      x: 2.7, y: 0, h: 20,
       title: "Client channel",
       sub: "one inbox, no AI\ndeterministic pipe",
       state: "planned",
     },
     {
       id: "daemon",
-      x: 4, y: 0, h: 52,
+      x: 5.4, y: 0, h: 30,
       title: "herdupd",
       sub: "SQLite · unix socket\nthe only thing that talks to herdr",
       state: "planned",
@@ -44,7 +44,7 @@
     },
     {
       id: "team",
-      x: 4, y: 2, h: 40,
+      x: 5.4, y: 3.1, h: 24,
       title: "The team",
       sub: "PM · coders · QA\nin herdr panes",
       state: "shipping",
@@ -52,14 +52,14 @@
     },
     {
       id: "board",
-      x: 2, y: 2, h: 30,
+      x: 2.7, y: 3.1, h: 18,
       title: "Board & thread",
       sub: "kanban, PM↔agent traffic\ndocuments",
       state: "planned",
     },
     {
       id: "summary",
-      x: 0, y: 2, h: 26,
+      x: 0, y: 3.1, h: 16,
       title: "Executive summary",
       sub: "status · KPIs\nback to the client",
       state: "planned",
@@ -104,8 +104,12 @@
   }
 
   function label(g, n) {
+    // The top face is a diamond reaching H/2 above its centre, so a label
+    // placed near the centre lands ON the slab. Clear it entirely.
     const p = iso(n.x, n.y, n.h);
-    const t = el("text", { class: "iso-title", x: p.px.toFixed(1), y: (p.py - 16).toFixed(1) });
+    const lift = H / 2 + 16;
+
+    const t = el("text", { class: "iso-title", x: p.px.toFixed(1), y: (p.py - lift - 14).toFixed(1) });
     t.textContent = n.title;
     g.appendChild(t);
 
@@ -113,7 +117,7 @@
       const s = el("text", {
         class: "iso-sub",
         x: p.px.toFixed(1),
-        y: (p.py - 2 + i * 13).toFixed(1),
+        y: (p.py - lift + 1 + i * 12).toFixed(1),
       });
       s.textContent = line;
       g.appendChild(s);
@@ -123,7 +127,7 @@
     const badge = el("text", {
       class: "iso-badge " + n.state,
       x: p.px.toFixed(1),
-      y: (p.py - 30).toFixed(1),
+      y: (p.py - H / 2 - 46).toFixed(1),
     });
     badge.textContent = n.state === "shipping" ? "SHIPPING" : "PLANNED";
     g.appendChild(badge);
