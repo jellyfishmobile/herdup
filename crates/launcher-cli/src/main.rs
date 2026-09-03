@@ -10,6 +10,7 @@
 use launcher_core::config::ConfigError;
 use launcher_core::herdr::types::SplitDirection;
 use launcher_core::herdr::{HerdrCli, HerdrError, MIN_HERDR};
+use launcher_core::terminal::reap_in_background;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -857,7 +858,7 @@ fn smoke(args: &[String]) -> Result<(), AppError> {
 fn run_smoke(cli: &HerdrCli, cwd: &Path) -> Result<(), HerdrError> {
     step("ensure server");
     if !cli.server_running() {
-        cli.start_server()?;
+        reap_in_background(cli.start_server()?, Duration::ZERO);
         wait_for_server(cli, Duration::from_secs(15))?;
         println!("   started a headless server");
     } else {
