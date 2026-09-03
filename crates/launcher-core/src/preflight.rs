@@ -8,6 +8,7 @@ use crate::herdr::{HerdrCli, HerdrError};
 use crate::plan::{LaunchPlan, PaneRef};
 use crate::registry::Registry;
 use crate::settings::Settings;
+use crate::terminal::reap_in_background;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -364,7 +365,9 @@ pub fn ensure_server(herdr: &HerdrCli, timeout: Duration) -> Result<bool, HerdrE
     if herdr.server_running() {
         return Ok(false);
     }
-    herdr.start_server()?;
+    // The server is meant to outlive this call, so its reaping goes straight
+    // to a thread rather than leaving a zombie whenever it does stop.
+    reap_in_background(herdr.start_server()?, Duration::ZERO);
     let start = Instant::now();
     loop {
         match herdr.workspace_list() {

@@ -173,3 +173,63 @@ fn a_linux_terminal_override_replaces_the_program() {
     );
     assert_eq!(h.program, "kitty");
 }
+
+// ---------------------------------------------------------------------------
+// Reaping
+//
+// `open` returns as soon as the terminal is up, and dropping its Child unreaped
+// left a zombie under the app after every handoff on macOS. The same helper
+// takes the herdr server, which is meant to outlive the call that starts it.
+// ---------------------------------------------------------------------------
+
+#[cfg(unix)]
+mod reaping {
+    use launcher_core::terminal::reap_in_background;
+    use std::process::{Child, Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    fn spawn(program: &str, args: &[&str]) -> Child {
+        Command::new(program)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn")
+    }
+
+    /// `ps` prints nothing for a reaped pid and `Z…` for a zombie. Reaping may
+    /// happen off the calling thread, so allow it a moment.
+    fn assert_reaped(pid: u32) {
+        let start = Instant::now();
+        let mut stat = String::new();
+        while start.elapsed() < Duration::from_secs(3) {
+            let out = Command::new("ps")
+                .args(["-o", "stat=", "-p", &pid.to_string()])
+                .output()
+                .expect("ps");
+            stat = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if stat.is_empty() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("pid {pid} still exists three seconds on; ps stat {stat:?}");
+    }
+
+    #[test]
+    fn a_child_that_exits_at_once_leaves_no_zombie() {
+        let child = spawn("true", &[]);
+        let pid = child.id();
+        reap_in_background(child, Duration::from_millis(500));
+        assert_reaped(pid);
+    }
+
+    #[test]
+    fn a_child_that_outlives_the_grace_leaves_no_zombie() {
+        let child = spawn("sleep", &["0.2"]);
+        let pid = child.id();
+        reap_in_background(child, Duration::ZERO);
+        assert_reaped(pid);
+    }
+}

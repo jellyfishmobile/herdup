@@ -6,8 +6,12 @@
 //!
 //! Building the command is separated from running it so the argv can be tested
 //! on both platforms from either one.
+//!
+//! Whatever gets spawned is reaped, never dropped: see [`reap_in_background`].
 
 use std::path::{Path, PathBuf};
+use std::process::Child;
+use std::time::{Duration, Instant};
 
 /// What herdup will spawn.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,7 +198,9 @@ pub fn open(handoff: &Handoff) -> std::io::Result<std::process::Child> {
 ///
 /// Windows Terminal ships with Windows 11 but can be absent or unavailable, and
 /// failing to open a terminal must not make a successful launch look failed —
-/// the team is already running either way.
+/// the team is already running either way. Whichever launcher starts is handed
+/// to [`reap_in_background`], so it is reaped whether it returns at once or
+/// stays for the life of the window.
 pub fn open_with_fallback(
     project: &Path,
     session: Option<&str>,
@@ -206,15 +212,50 @@ pub fn open_with_fallback(
         Style::platform_default(),
         terminal_override,
     );
-    if open(&primary).is_ok() {
+    if let Ok(child) = open(&primary) {
+        reap_in_background(child, LAUNCHER_GRACE);
         return Ok(primary);
     }
     if cfg!(windows) {
         let fallback = handoff(project, session, Style::WindowsPowerShell, None);
-        if open(&fallback).is_ok() {
+        if let Ok(child) = open(&fallback) {
+            reap_in_background(child, LAUNCHER_GRACE);
             return Ok(fallback);
         }
         return Err(fallback);
     }
     Err(primary)
+}
+
+/// How long a terminal launcher gets to exit on its own before its reaping
+/// moves off this thread. `open` on macOS and `wt.exe` return once the terminal
+/// is up, usually well inside this; `powershell.exe -NoExit` never does.
+const LAUNCHER_GRACE: Duration = Duration::from_millis(250);
+
+/// Never drop a `Child` unreaped.
+///
+/// A child that exits before its parent waits on it is a zombie until the
+/// parent does, and herdup never did: `open` exits as soon as Terminal is up,
+/// so every macOS handoff left one under the running app for as long as the
+/// app lived. The child gets `grace` to exit on its own — the usual case for a
+/// launcher, reaped before this returns — and otherwise a detached thread
+/// blocks in `wait()` and reaps it whenever it does exit. A process meant to
+/// outlive the call, such as the herdr server, passes `Duration::ZERO` and goes
+/// straight to the thread.
+pub fn reap_in_background(mut child: Child, grace: Duration) {
+    let deadline = Instant::now() + grace;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            // Still running past the grace, or not waitable at all: the thread
+            // handles both, and a failed wait there costs nothing.
+            _ => break,
+        }
+    }
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
 }
