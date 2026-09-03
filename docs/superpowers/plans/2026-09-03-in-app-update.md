@@ -853,7 +853,7 @@ Replace the `bundle` object and add `plugins` in `app/src-tauri/tauri.conf.json`
 ```json
   "bundle": {
     "active": true,
-    "targets": ["msi", "nsis", "dmg", "deb", "appimage"],
+    "targets": ["app", "msi", "nsis", "dmg", "deb", "appimage"],
     "createUpdaterArtifacts": true,
     "macOS": { "signingIdentity": "-" },
     "icon": [
@@ -874,6 +874,12 @@ Replace the `bundle` object and add `plugins` in `app/src-tauri/tauri.conf.json`
     }
   }
 ```
+
+`"app"` must be listed explicitly: the bundler only produces the macOS updater
+archive (`herdup.app.tar.gz`) for the `app` target, and when only `dmg` is
+requested it deletes the `.app` after building the image and logs "no
+updater-enabled targets were built". Without it CI would publish a
+`latest.json` with no macOS entry. Found by QA on 2026-09-03.
 
 `signingIdentity: "-"` is ad-hoc signing. Today only the executable is linker-signed and `codesign --verify` fails on the bundle; a replaced bundle must carry a valid signature or Apple silicon may refuse to launch it.
 
@@ -959,11 +965,17 @@ Serve it in the background: `python3 -m http.server 8765 --bind 127.0.0.1 -d "$S
 
 - [ ] **Step 5: Install the 0.1.0 copy where it can replace itself**
 
+The override must go at the **top** of `settings.toml`. Appending it after a
+`[[verified]]` table files it inside that table, where it is silently ignored
+and the app quietly uses the real feed instead. Found by QA on 2026-09-03.
+
 ```bash
 test -e ~/Applications/herdup.app && echo "STOP: ~/Applications/herdup.app exists" || mkdir -p ~/Applications
 cp -R "$S/v0/herdup.app" ~/Applications/herdup.app
-cp ~/Library/Application\ Support/herdup/settings.toml "$S/settings.backup.toml" 2>/dev/null || true
-printf 'update_endpoint = "http://127.0.0.1:8765/latest.json"\n' >> ~/Library/Application\ Support/herdup/settings.toml
+F=~/Library/Application\ Support/herdup/settings.toml
+cp "$F" "$S/settings.backup.toml" 2>/dev/null || : > "$S/settings.backup.toml"
+{ printf 'update_endpoint = "http://127.0.0.1:8765/latest.json"\n'; cat "$S/settings.backup.toml"; } > "$F"
+python3 -c "import tomllib;d=tomllib.load(open('$F'.replace('~','$HOME'),'rb'));print('override at top level:', 'update_endpoint' in d)"
 open ~/Applications/herdup.app
 ```
 
