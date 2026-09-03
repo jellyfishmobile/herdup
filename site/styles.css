@@ -398,3 +398,88 @@ main section.direction { padding: 28px 24px 32px; }
 }
 /* Only one of these is real software, and it should read that way. */
 .ph.shipped { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+
+/* --- the pipeline diagram ---------------------------------------- */
+
+.factory {
+  position: relative; margin: 30px 0 34px; padding: 26px 22px 20px;
+  border: 1px solid var(--rule); border-radius: var(--radius-lg, 12px);
+  background: var(--card); overflow: hidden;
+}
+/* Generated art direction, held well back so it never competes with labels. */
+.factory-plate {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: url("/img/factory.png"); background-size: cover; background-position: center;
+  opacity: 0.14; filter: saturate(0.7);
+}
+@media (prefers-color-scheme: dark) { .factory-plate { opacity: 0.2; } }
+
+.factory .line {
+  position: relative; display: grid; align-items: stretch; gap: 0;
+  grid-template-columns: 1fr; z-index: 1;
+}
+@media (min-width: 820px) {
+  .factory .line { grid-template-columns: 1fr 26px 1fr 26px 1fr 26px 1fr; }
+}
+
+.station {
+  border: 1px solid var(--rule); border-radius: 10px; padding: 14px 15px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(3px);
+}
+.station.lead { border-color: var(--acc-line); background: color-mix(in srgb, var(--acc-soft) 82%, transparent); }
+.station .cap {
+  display: block; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--faint); font-weight: 600; margin-bottom: 6px;
+}
+.station.lead .cap { color: var(--acc); }
+.station h4 { margin: 0 0 4px; font-size: 15.5px; letter-spacing: -0.02em; }
+.station p { margin: 0; font-size: 12.5px; color: var(--dim); }
+
+/* The connector. Horizontal on wide screens, vertical when stacked. */
+.link { align-self: center; height: 2px; background: var(--rule); position: relative; }
+.link::after {
+  content: ""; position: absolute; right: -1px; top: -3px;
+  border-left: 6px solid var(--rule); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+}
+@media (max-width: 819px) {
+  .link { width: 2px; height: 20px; margin: 0 auto; }
+  .link::after { right: -3px; top: auto; bottom: -1px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid var(--rule); border-bottom: 0; }
+}
+
+/* The belt: requests moving through the line. */
+.belt {
+  position: relative; z-index: 1; height: 26px; margin-top: 18px;
+  border-radius: 999px; background: var(--rule-soft);
+  border: 1px solid var(--rule); overflow: hidden;
+}
+.belt-run { position: absolute; inset: 0; }
+.block {
+  position: absolute; top: 50%; width: 12px; height: 12px; margin-top: -6px;
+  border-radius: 3px; background: var(--faint); opacity: 0;
+}
+.block.hot { background: var(--acc); box-shadow: 0 0 10px color-mix(in srgb, var(--acc) 60%, transparent); }
+
+.factory figcaption {
+  position: relative; z-index: 1; margin-top: 16px;
+  font-size: 12.5px; color: var(--faint); text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No belt motion; the blocks sit still and the diagram still reads. */
+  .block { opacity: 0.6 !important; }
+}
+
+/* The plate is art direction, not content: hold it back so the labels and the
+   flow always win. Without this scrim the arrows disappear into the render. */
+.factory-plate::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 50% 50%,
+    color-mix(in srgb, var(--card) 55%, transparent) 0%,
+    color-mix(in srgb, var(--card) 88%, transparent) 100%);
+}
+.factory { isolation: isolate; }
+.link { background: var(--faint); opacity: 0.85; }
+.link::after { border-left-color: var(--faint); }
+@media (max-width: 819px) { .link::after { border-top-color: var(--faint); } }
+.factory figcaption { color: var(--dim); }

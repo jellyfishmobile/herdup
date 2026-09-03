@@ -67,6 +67,17 @@ PROMPTS = {
         "no text, no logos "
         "--ar 16:9 --style raw --q 2 --s 250"
     ),
+    # Art direction only. The pipeline diagram itself is built in code, because
+    # generated imagery cannot carry accurate labels or a correct flow — it
+    # would look like an explanation without being one.
+    "factory": (
+        "Isometric 3D render of a clean automated assembly line, conveyor belts carrying "
+        "small glowing amber blocks between four distinct workstations, dark slate and "
+        "graphite machinery, warm amber accent lighting, matte surfaces, soft studio "
+        "lighting, shallow depth of field, generous empty floor space around the line, "
+        "minimal, product-render quality, no text, no logos, no people "
+        "--ar 16:9 --style raw --q 2 --s 200"
+    ),
     "texture": (
         "Extreme close up of weathered saddle leather, warm amber brown, soft raking "
         "light, fine grain and subtle scuffs, muted and desaturated, abstract, "
@@ -80,6 +91,13 @@ PROMPTS = {
 # supports 16:9 at 1080P. Kept short and slow-moving: this sits behind the
 # headline, so motion must never compete with the text.
 VIDEO_PROMPTS = {
+    "factory": (
+        "Slow steady isometric shot of a clean automated assembly line, conveyor belts "
+        "carrying small glowing amber blocks left to right between workstations, robotic "
+        "arms moving in a calm repeating rhythm, dark slate machinery, warm amber accent "
+        "light, matte surfaces, soft studio lighting, very slow camera drift, no text, "
+        "no logos, no people"
+    ),
     "hero": (
         "Slow cinematic drift across an open high plain at golden hour, a distant "
         "herd moving unhurried through low dust, long raking sunlight, deep amber "

@@ -18,7 +18,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" as="image" href="/img/hero.png" />
-    <link rel="stylesheet" href="/styles.css?v=12" />
+    <link rel="stylesheet" href="/styles.css?v=14" />
   </head>
   <body>
     <header class="top">
@@ -279,6 +279,57 @@
           a studio.
         </p>
 
+        <!-- The pipeline, drawn in code so the flow and the labels are
+             actually correct. The generated plate behind it is art direction
+             only — see pipeline.js. -->
+        <figure id="factory" class="factory rise">
+          <div class="factory-plate" aria-hidden></div>
+
+          <div class="line">
+            <div class="station">
+              <span class="cap">In</span>
+              <h4>Channel</h4>
+              <p>WhatsApp · Telegram · Slack · email · docs</p>
+            </div>
+            <div class="link" aria-hidden></div>
+
+            <div class="station lead">
+              <span class="cap">Translate</span>
+              <h4>PM</h4>
+              <p>chat becomes scoped, executable tasks</p>
+            </div>
+            <div class="link" aria-hidden></div>
+
+            <div class="station">
+              <span class="cap">Execute</span>
+              <h4>Coders · QA</h4>
+              <p>write, verify, move the card</p>
+            </div>
+            <div class="link" aria-hidden></div>
+
+            <div class="station">
+              <span class="cap">Out</span>
+              <h4>Board &amp; summary</h4>
+              <p>status, thread, documents, KPIs</p>
+            </div>
+          </div>
+
+          <div class="belt" aria-hidden>
+            <div class="belt-run">
+              <span class="block"></span>
+              <span class="block hot"></span>
+              <span class="block"></span>
+              <span class="block"></span>
+              <span class="block"></span>
+            </div>
+          </div>
+
+          <figcaption>
+            One request, end to end. The daemon is the only part that talks to herdr, so the
+            thread you read is the traffic itself — not a log kept alongside it.
+          </figcaption>
+        </figure>
+
         <h3 class="minor rise">In order</h3>
         <ol class="phases rise">
           <li>
@@ -520,7 +571,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-    <script src="/scroll.js?v=12"></script>
+    <script src="/scroll.js?v=14"></script>
+    <script src="/pipeline.js?v=1"></script>
     <script>
       // The hero video is an upgrade on the still, not a requirement: it only
       // swaps in once it can actually play, and never for reduced-motion.
