@@ -578,3 +578,36 @@ main section.direction { padding: 28px 24px 32px; }
 }
 /* The inbound arc is drawn faint; the outbound arc is the confident one. */
 .iso-edge { opacity: 0.4; }
+
+/* --- isometric factory line -------------------------------------- */
+
+/* Belt: dark deck, amber edge, visible rollers — a real conveyor, not a line. */
+.belt-top { fill: #3a4152; stroke: #2a3040; stroke-width: 1; }
+.belt-side { fill: var(--acc); stroke: color-mix(in srgb, var(--acc) 70%, #000); stroke-width: 1; }
+.belt-roller { stroke: #4d5568; stroke-width: 1.4; opacity: 0.85; }
+.belt-leg { stroke: #6b7385; stroke-width: 2.6; stroke-linecap: round; }
+
+/* Parcels. Raw ones are pale card; ordered ones are amber and identical. */
+.bx-t.raw { fill: #e6d6bd; } .bx-l.raw { fill: #b99f78; } .bx-r.raw { fill: #cdb490; }
+.bx-t.ord { fill: color-mix(in srgb, var(--acc) 30%, #ffffff); }
+.bx-l.ord { fill: color-mix(in srgb, var(--acc) 85%, #000000); }
+.bx-r.ord { fill: var(--acc); }
+.bx-seam { stroke: rgba(0,0,0,0.18); stroke-width: 1; }
+
+/* Machines: light bodies, one accent panel, so the belt stays the hero. */
+.mc-t { fill: #dfe4ec; } .mc-l { fill: #a9b2c4; } .mc-r { fill: #c4ccd9; }
+.mc-t.on { fill: color-mix(in srgb, var(--acc) 24%, #ffffff); }
+.mc-l.on { fill: color-mix(in srgb, var(--acc) 72%, #000000); }
+.mc-r.on { fill: var(--acc); }
+.mc-panel { fill: #2f3646; }
+.mc-panel.on { fill: #1d2330; }
+
+.fg-shadow { fill: rgba(0,0,0,0.10); }
+.fg-body { fill: #4a5570; }
+.fg-head { fill: #e9c9a8; }
+
+@media (prefers-color-scheme: dark) {
+  .mc-t { fill: #39404f; } .mc-l { fill: #232935; } .mc-r { fill: #2e3543; }
+  .fg-body { fill: #8994ad; }
+  .belt-top { fill: #262c38; }
+}
