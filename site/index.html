@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>herdup — put a team of AIs on your code</title>
+    <meta
+      name="description"
+      content="A desktop launcher for herdr. Pick a project, pick a team, and herdup starts several AI coding agents side by side in one terminal."
+    />
+    <meta property="og:title" content="herdup" />
+    <meta
+      property="og:description"
+      content="Put a team of AI coding agents on your project, in one terminal, in about twenty seconds."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <span class="mark">herdup</span>
+      <nav>
+        <a href="#requirements">Requirements</a>
+        <a href="#supported">Supported tools</a>
+        <a href="#download">Download</a>
+        <a href="https://github.com/jellyfishmobile/herdup">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>Put a team of AIs on your code.</h1>
+        <p class="lede">
+          herdup is a small desktop app that starts several AI coding agents on one project, side
+          by side in a single terminal. Pick a folder, pick how much help you want, press start.
+        </p>
+        <div class="cta">
+          <a class="btn solid" href="#download">Download</a>
+          <a class="btn" href="#how">How it works</a>
+        </div>
+        <p class="fineprint">
+          Windows, macOS and Linux · free and open source · needs
+          <a href="https://github.com/herdr-dev/herdr">herdr</a> installed
+        </p>
+      </section>
+
+      <section id="objective">
+        <h2>What it's for</h2>
+        <p>
+          Running one coding agent is easy. Running four — a lead splitting up the work, two
+          writing code, one testing — means juggling terminals, remembering flags, answering the
+          same trust prompt four times, and briefing each one by hand. People give up before they
+          find out whether a team is actually better than a single agent.
+        </p>
+        <p>
+          herdup does that setup. It builds the layout, starts each agent, waits until each is
+          genuinely at its prompt, and hands each one its instructions. Then it gets out of the way
+          and gives you the terminal. It is a launcher, not a wrapper: once your team is running,
+          herdup is not in the loop.
+        </p>
+      </section>
+
+      <section id="how">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li>
+            <strong>Pick a project.</strong> A folder on your machine. If it has no version
+            history, or uncommitted changes, herdup says so before anything starts — these agents
+            edit files, and that should never be a surprise.
+          </li>
+          <li>
+            <strong>Pick a team.</strong> Start from a size — one, two, four or six — then add or
+            remove people. You see the shape of the workspace you're about to get before you get
+            it.
+          </li>
+          <li>
+            <strong>Press start.</strong> herdup creates the layout, starts each tool, waits for
+            each to actually reach its prompt, and briefs it. About twenty seconds.
+          </li>
+          <li>
+            <strong>Take the terminal.</strong> Your team is running in herdr. Start another
+            project alongside it if you want; they run independently.
+          </li>
+        </ol>
+      </section>
+
+      <section id="requirements">
+        <h2>Requirements</h2>
+        <div class="cards">
+          <div class="card">
+            <h3>herdr 0.8.2 or newer</h3>
+            <p>
+              herdup drives <a href="https://github.com/herdr-dev/herdr">herdr</a>, the terminal
+              multiplexer that actually runs the agents. It must be installed and on your PATH.
+              herdup checks the version and refuses to launch against anything older, because it
+              relies on herdr's agent API.
+            </p>
+          </div>
+          <div class="card">
+            <h3>At least one agent CLI</h3>
+            <p>
+              herdup starts tools you already have; it does not bundle or resell them. You need at
+              least one of the tools listed below installed and signed in. Their subscriptions and
+              API costs are between you and them.
+            </p>
+          </div>
+          <div class="card">
+            <h3>git, strongly recommended</h3>
+            <p>
+              Not required, but these agents edit files. Without version history there is no undo,
+              and herdup will warn you every time.
+            </p>
+          </div>
+          <div class="card">
+            <h3>A terminal</h3>
+            <p>
+              Windows Terminal on Windows (PowerShell is used as a fallback), Terminal.app on
+              macOS, or whatever <code>x-terminal-emulator</code> points at on Linux.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="supported">
+        <h2>Supported tools</h2>
+        <p class="sub">
+          Any of these can fill any role on a team. herdup knows each one's command, its
+          permission flags, and whether it can be briefed unattended.
+        </p>
+        <ul class="chips">
+          <li>Claude Code</li>
+          <li>Codex</li>
+          <li>Gemini CLI</li>
+          <li>Cursor Agent</li>
+          <li>GitHub Copilot CLI</li>
+          <li>Droid</li>
+          <li>Amp</li>
+          <li>opencode</li>
+          <li>Cline</li>
+          <li>Devin CLI</li>
+          <li>Grok CLI</li>
+          <li>Kimi Code CLI</li>
+          <li>Kilo Code CLI</li>
+          <li>Kiro CLI</li>
+          <li>Qwen Code</li>
+          <li>Qoder CLI</li>
+          <li>Antigravity CLI</li>
+          <li>Mastra Code</li>
+          <li>Hermes Agent</li>
+          <li>agy</li>
+          <li>omp</li>
+          <li>pi</li>
+          <li>maki</li>
+          <li>muse</li>
+        </ul>
+        <p class="sub">
+          The list lives in a plain <code>registry.toml</code> you can edit, so adding a tool
+          herdup has never heard of does not require a new build.
+        </p>
+
+        <h3 class="minor">One deliberate limitation</h3>
+        <p>
+          herdup only types instructions into an agent unattended when it can reliably tell that
+          the agent is at its prompt rather than sitting behind a dialog. For tools where that has
+          not been verified, it holds the instructions and asks you to release them after a look.
+          This exists because an early version fired a briefing into a tool that was showing a
+          "trust this folder?" prompt, and the Enter keypress answered the dialog instead.
+        </p>
+      </section>
+
+      <section id="download">
+        <h2>Download</h2>
+        <p class="sub">
+          Installers are built by CI for each release. Nothing is code-signed yet, so Windows
+          SmartScreen and macOS Gatekeeper will both warn you on first run.
+        </p>
+        <div class="dl">
+          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+            <span class="os">Windows</span>
+            <span class="file">.msi installer or .exe setup</span>
+            <span class="state ok">tested</span>
+          </a>
+          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+            <span class="os">macOS</span>
+            <span class="file">.dmg — Apple silicon and Intel</span>
+            <span class="state warn">built, not yet exercised</span>
+          </a>
+          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+            <span class="os">Linux</span>
+            <span class="file">.deb and .AppImage</span>
+            <span class="state warn">built, not yet exercised</span>
+          </a>
+        </div>
+        <p class="fineprint">
+          Honest status: herdup is developed and tested on Windows. The macOS and Linux installers
+          are produced by the same CI from the same commit, but nobody has yet run them on a real
+          desktop. If you try one, please
+          <a href="https://github.com/jellyfishmobile/herdup/issues">say what happened</a>.
+        </p>
+      </section>
+
+      <section id="support">
+        <h2>Support</h2>
+        <div class="cards">
+          <div class="card">
+            <h3>Bugs and questions</h3>
+            <p>
+              Open an issue on
+              <a href="https://github.com/jellyfishmobile/herdup/issues">GitHub</a>. Include your
+              OS, your herdr version (<code>herdr --version</code>), and which tools were on the
+              team.
+            </p>
+          </div>
+          <div class="card">
+            <h3>It isn't finding my tool</h3>
+            <p>
+              herdup looks for each tool's binary on your PATH and tells you exactly what it looked
+              for. If yours lives somewhere unusual, edit <code>registry.toml</code> rather than
+              waiting for a release.
+            </p>
+          </div>
+          <div class="card">
+            <h3>What herdup never does</h3>
+            <p>
+              It does not send your code anywhere, add a service between you and your tools, or
+              require an account. The only thing that leaves your machine is an optional
+              "create a GitHub repository" action you have to ask for.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        herdup is an independent launcher for
+        <a href="https://github.com/herdr-dev/herdr">herdr</a> and is not affiliated with herdr or
+        with any of the agent tools listed above.
+      </p>
+      <p class="fineprint">
+        <a href="https://github.com/jellyfishmobile/herdup">Source</a> ·
+        <a href="https://github.com/jellyfishmobile/herdup/issues">Issues</a> ·
+        <a href="https://github.com/jellyfishmobile/herdup/releases">Releases</a>
+      </p>
+    </footer>
+  </body>
+</html>

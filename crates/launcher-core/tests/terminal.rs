@@ -139,3 +139,37 @@ fn the_platform_default_matches_the_host() {
         assert_eq!(style, Style::MacOpen);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Linux
+//
+// Untested on a real desktop: CI builds the artifact but nobody has run it.
+// These pin the command shape so the guess is at least a documented one.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn linux_passes_a_script_to_the_terminal_alternative() {
+    let h = handoff(
+        Path::new("/home/dev/my app"),
+        Some("herdup"),
+        Style::LinuxTerminal,
+        None,
+    );
+    assert_eq!(h.program, "x-terminal-emulator");
+    assert_eq!(h.args, vec!["-e"]);
+    assert_eq!(h.cwd.as_deref(), Some(Path::new("/home/dev/my app")));
+    let script = h.script.expect("linux uses a launcher script");
+    assert!(script.contains("'/home/dev/my app'"), "{script}");
+    assert!(script.contains("exec herdr --session 'herdup'"), "{script}");
+}
+
+#[test]
+fn a_linux_terminal_override_replaces_the_program() {
+    let h = handoff(
+        Path::new("/tmp/p"),
+        None,
+        Style::LinuxTerminal,
+        Some("kitty"),
+    );
+    assert_eq!(h.program, "kitty");
+}

@@ -40,6 +40,12 @@ pub enum Style {
     WindowsPowerShell,
     /// `open -a <App> <script>`
     MacOpen,
+    /// `x-terminal-emulator -e <script>`, with the cwd set on the process.
+    ///
+    /// Linux has no single terminal, so this goes through Debian's
+    /// `x-terminal-emulator` alternative by default and takes an override for
+    /// everything else. Untested on a real desktop — see DESIGN.md.
+    LinuxTerminal,
 }
 
 impl Style {
@@ -47,8 +53,10 @@ impl Style {
     pub fn platform_default() -> Style {
         if cfg!(windows) {
             Style::WindowsTerminal
-        } else {
+        } else if cfg!(target_os = "macos") {
             Style::MacOpen
+        } else {
+            Style::LinuxTerminal
         }
     }
 }
@@ -110,6 +118,20 @@ pub fn handoff(
                 program: "open".to_string(),
                 args: vec!["-a".to_string(), app.to_string()],
                 cwd: None,
+                script: Some(launcher_script(project, session)),
+            }
+        }
+        Style::LinuxTerminal => {
+            // Same trick as macOS: the project path lives in a script file
+            // rather than being interpolated through an unknown terminal's own
+            // argument parsing. `-e <file>` is the one flag essentially every
+            // emulator agrees on.
+            Handoff {
+                program: terminal_override
+                    .unwrap_or("x-terminal-emulator")
+                    .to_string(),
+                args: vec!["-e".to_string()],
+                cwd: Some(project.to_path_buf()),
                 script: Some(launcher_script(project, session)),
             }
         }

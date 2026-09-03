@@ -1,0 +1,166 @@
+/* herdup landing page.
+ *
+ * Same visual language as the app itself: Space Grotesk, hairlines over boxes,
+ * one warm accent, generous but not empty. Light and dark both defined on
+ * tokens so neither is an afterthought.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap");
+
+:root {
+  --pa: #f8f8f7;
+  --card: #ffffff;
+  --ink: #141517;
+  --dim: #55585d;
+  --faint: #8b8e94;
+  --rule: #e4e4e2;
+  --rule-soft: #eeeeec;
+  --acc: #b8681e;
+  --acc-soft: #fbf1e6;
+  --acc-line: #ecd8bf;
+  --ok: #1c6b45;
+  --ok-soft: #eaf3ee;
+  --warn: #a9621b;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pa: #131417;
+    --card: #191b1f;
+    --ink: #ecedef;
+    --dim: #a8abb1;
+    --faint: #7c7f85;
+    --rule: #2a2d33;
+    --rule-soft: #212429;
+    --acc: #d9903f;
+    --acc-soft: #241d15;
+    --acc-line: #4a3a24;
+    --ok: #5cbf8f;
+    --ok-soft: #16241d;
+    --warn: #d9a05a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--pa);
+  color: var(--ink);
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--acc); text-decoration: none; border-bottom: 1px solid transparent; }
+a:hover { border-bottom-color: currentColor; }
+code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.88em; background: var(--rule-soft); padding: 1px 5px; border-radius: 4px;
+}
+
+/* --- chrome --------------------------------------------------------------- */
+
+.top {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  max-width: 900px; margin: 0 auto; padding: 22px 24px;
+  border-bottom: 1px solid var(--rule); flex-wrap: wrap;
+}
+.mark { font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 500; color: var(--acc); }
+.top nav { display: flex; gap: 20px; flex-wrap: wrap; }
+.top nav a { color: var(--dim); font-size: 14px; }
+.top nav a:hover { color: var(--ink); }
+
+main { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+section { padding: 56px 0; border-bottom: 1px solid var(--rule); }
+section:last-child { border-bottom: 0; }
+
+h1 {
+  font-size: clamp(34px, 6vw, 52px); line-height: 1.03; letter-spacing: -0.04em;
+  font-weight: 700; margin: 0 0 16px; text-wrap: balance;
+}
+h2 { font-size: 26px; letter-spacing: -0.03em; font-weight: 700; margin: 0 0 14px; text-wrap: balance; }
+h3 { font-size: 17px; letter-spacing: -0.02em; font-weight: 700; margin: 0 0 6px; }
+h3.minor { margin-top: 36px; }
+p { margin: 0 0 14px; max-width: 68ch; text-wrap: pretty; }
+p.sub, .lede { color: var(--dim); }
+.lede { font-size: 18px; max-width: 56ch; margin-bottom: 26px; }
+.fineprint { font-size: 13.5px; color: var(--faint); }
+
+/* --- hero ----------------------------------------------------------------- */
+
+.hero { padding-top: 72px; border-bottom: 1px solid var(--rule); }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.btn {
+  display: inline-block; border: 1px solid var(--rule); background: var(--card);
+  color: var(--ink); padding: 11px 20px; border-radius: var(--radius);
+  font-size: 15px; font-weight: 500;
+  transition: border-color 160ms ease-out, background 160ms ease-out;
+}
+.btn:hover { border-color: var(--ink); }
+.btn.solid { background: var(--ink); border-color: var(--ink); color: var(--pa); }
+.btn.solid:hover { background: var(--acc); border-color: var(--acc); color: #fff; }
+
+/* --- content blocks ------------------------------------------------------- */
+
+.steps { counter-reset: s; list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.steps li {
+  counter-increment: s; position: relative; padding-left: 40px;
+  color: var(--dim); max-width: 68ch;
+}
+.steps li::before {
+  content: counter(s); position: absolute; left: 0; top: 2px;
+  width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; color: var(--acc);
+  background: var(--acc-soft); border: 1px solid var(--acc-line);
+}
+.steps strong { color: var(--ink); font-weight: 600; }
+
+.cards { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 700px) { .cards { grid-template-columns: 1fr 1fr; } }
+.card {
+  border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--card); padding: 18px;
+}
+.card p { margin: 0; color: var(--dim); font-size: 14.5px; }
+
+.chips { list-style: none; display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 18px; padding: 0; }
+.chips li {
+  border: 1px solid var(--rule); background: var(--card); border-radius: 999px;
+  padding: 5px 13px; font-size: 13.5px; color: var(--dim);
+}
+
+/* --- downloads ------------------------------------------------------------ */
+
+.dl { display: grid; gap: 10px; grid-template-columns: 1fr; margin-bottom: 18px; }
+@media (min-width: 700px) { .dl { grid-template-columns: repeat(3, 1fr); } }
+.dlcard {
+  display: grid; gap: 4px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--card); padding: 18px; color: var(--ink);
+  transition: border-color 160ms ease-out, transform 160ms ease-out;
+}
+.dlcard:hover { border-color: var(--acc); transform: translateY(-2px); }
+.dlcard .os { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.dlcard .file { font-size: 13px; color: var(--faint); }
+.dlcard .state {
+  justify-self: start; margin-top: 8px; font-size: 11.5px; font-weight: 500;
+  border-radius: 999px; padding: 2px 9px; border: 1px solid;
+}
+.dlcard .state.ok { color: var(--ok); background: var(--ok-soft); border-color: var(--ok); }
+.dlcard .state.warn { color: var(--warn); background: var(--acc-soft); border-color: var(--acc-line); }
+
+/* --- footer --------------------------------------------------------------- */
+
+footer {
+  max-width: 900px; margin: 0 auto; padding: 32px 24px 56px;
+  border-top: 1px solid var(--rule); color: var(--faint); font-size: 14px;
+}
+footer p { max-width: 68ch; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 1ms !important; }
+  .dlcard:hover { transform: none; }
+}
