@@ -135,7 +135,6 @@ export default function App() {
   );
 
   useEffect(() => {
-    api.listTemplates().then(setTemplates).catch((e) => setError(String(e)));
     api.listAddableRoles().then(setAddable).catch(() => setAddable([]));
     api.listClis().then(setClis).catch((e) => setError(String(e)));
     api.defaultProjectsRoot().then((root) => root && setProject((p) => p || root));
@@ -167,6 +166,25 @@ export default function App() {
       .projectStatus(project)
       .then((s) => live && setStatus(s))
       .catch(() => live && setStatus(null));
+    return () => {
+      live = false;
+    };
+  }, [project]);
+
+  // The team list depends on the project: a repository may carry its own
+  // team, which is offered first and preselected. Leaving such a project
+  // drops that selection back to the default.
+  useEffect(() => {
+    let live = true;
+    api
+      .listTemplates(project || null)
+      .then((ts) => {
+        if (!live) return;
+        setTemplates(ts);
+        const repo = ts.find((t) => t.from_repo);
+        setTemplateId((id) => (repo ? "repo" : id === "repo" ? "squad" : id));
+      })
+      .catch((e) => live && setError(String(e)));
     return () => {
       live = false;
     };
@@ -332,6 +350,7 @@ export default function App() {
         {step === "team" && (
           <TeamStep
             project={project}
+            status={status}
             templates={templates}
             addable={addable}
             clis={clis}
@@ -696,6 +715,7 @@ function NewRepoPanel(props: { setProject: (p: string) => void }) {
 
 function TeamStep(props: {
   project: string;
+  status: ProjectStatus | null;
   templates: Template[];
   addable: AddableRole[];
   clis: Cli[];
@@ -712,12 +732,11 @@ function TeamStep(props: {
 }) {
   const seg = useRef<HTMLDivElement>(null);
   const panes = props.plan?.panes ?? [];
-  // The backend hands these back keyed by id, so they arrive alphabetically.
-  // A size picker has to read 1, 2, 4, 6.
-  const presets = useMemo(
-    () => [...props.templates].sort((a, b) => a.panes.length - b.panes.length),
-    [props.templates],
-  );
+  // Size order, except that the repository's own team always comes first.
+  const presets = useMemo(() => {
+    const sorted = [...props.templates].sort((a, b) => a.panes.length - b.panes.length);
+    return [...sorted.filter((t) => t.from_repo), ...sorted.filter((t) => !t.from_repo)];
+  }, [props.templates]);
 
   // The thumb travels to the active preset rather than cross-fading.
   useLayoutEffect(() => {
@@ -836,9 +855,19 @@ function TeamStep(props: {
           >
             <span className="n">{t.panes.length}</span>
             <span className="l">{t.display_name}</span>
+            {t.from_repo && (
+              <span className="tag repo" data-testid="template-repo-tag">
+                this repo
+              </span>
+            )}
           </button>
         ))}
       </div>
+      {props.status?.team_file && (
+        <p className="state warn" data-testid="team-file-error">
+          .herdr/team.toml: {props.status.team_file}
+        </p>
+      )}
       <p className="pitch">
         {edited
           ? "Your own line-up — pick a size above to start over."

@@ -16,6 +16,8 @@ export type Template = {
   display_name: string;
   description: string;
   panes: TemplatePane[];
+  /// From the project's own .herdr/team.toml.
+  from_repo: boolean;
 };
 
 export type Cli = {
@@ -149,6 +151,8 @@ export type ProjectStatus = {
   versioned: boolean;
   branch: string | null;
   uncommitted: number;
+  /// The project's .herdr/team.toml exists but failed to load: its message.
+  team_file: string | null;
 };
 
 export type LaunchOptions = {
@@ -192,7 +196,8 @@ export const api = {
     into: string;
     description: string | null;
   }) => invoke<CreatedRepo>("create_repo", args),
-  listTemplates: () => invoke<Template[]>("list_templates"),
+  listTemplates: (project: string | null) =>
+    invoke<Template[]>("list_templates", { project }),
   listAddableRoles: () => invoke<AddableRole[]>("list_addable_roles"),
   projectStatus: (project: string) => invoke<ProjectStatus>("project_status", { project }),
   listClis: () => invoke<Cli[]>("list_clis"),
