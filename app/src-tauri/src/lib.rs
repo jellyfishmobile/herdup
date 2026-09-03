@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
+use tauri_plugin_updater::UpdaterExt;
 
 const DEFAULT_SESSION: &str = "herdup";
 
@@ -230,6 +231,8 @@ pub struct AppState {
     /// The most recent launch, so a held briefing can be released later.
     outcome: Mutex<Option<Outcome>>,
     first_run: Mutex<Option<FirstRunSession>>,
+    /// The update found by the last check, so Install can act on it.
+    update: Mutex<Option<tauri_plugin_updater::Update>>,
 }
 
 fn client() -> Result<HerdrCli, String> {
@@ -921,6 +924,147 @@ fn default_projects_root() -> Option<String> {
         .map(|p| p.display().to_string())
 }
 
+/// Result of asking the release feed. `update` is `None` when this copy is
+/// current. `current_version` is always present so the UI can say so.
+#[derive(Serialize)]
+pub struct UpdateCheckDto {
+    current_version: String,
+    update: Option<UpdateDto>,
+}
+
+#[derive(Serialize)]
+pub struct UpdateDto {
+    version: String,
+    notes: Option<String>,
+    /// macOS mounted this copy read-only from a quarantined DMG or download;
+    /// the bundle cannot be replaced until it is moved to Applications.
+    translocated: bool,
+}
+
+#[derive(Clone, Serialize)]
+pub struct UpdateProgressDto {
+    downloaded: u64,
+    total: Option<u64>,
+    installing: bool,
+}
+
+/// One short sentence per plugin failure. The manual check shows these; the
+/// startup check drops them.
+///
+/// The plugin's error enum may gain variants; the final arm keeps this
+/// compiling. If a named variant below does not exist in the resolved plugin
+/// version, delete that arm — do not guess a replacement.
+fn describe_update_error(e: tauri_plugin_updater::Error) -> String {
+    use tauri_plugin_updater::Error as E;
+    match e {
+        E::ReleaseNotFound => "no published release".into(),
+        E::Network(msg) if msg.contains("404") => "no published release".into(),
+        E::Network(msg) => format!("network: {msg}"),
+        E::Reqwest(err) => format!("network unreachable: {err}"),
+        E::InsecureTransportProtocol => "the update endpoint must use https".into(),
+        E::Minisign(_) | E::SignatureUtf8(_) | E::Base64(_) => {
+            "the download did not verify; nothing was installed".into()
+        }
+        E::Serialization(_)
+        | E::InvalidUpdaterFormat
+        | E::TargetNotFound(_)
+        | E::TargetsNotFound(_) => "the update feed is malformed".into(),
+        E::AuthenticationFailed => {
+            "administrator approval was refused; nothing was installed".into()
+        }
+        E::Io(err) => format!("could not replace the app: {err}"),
+        other => other.to_string(),
+    }
+}
+
+fn running_translocated() -> bool {
+    std::env::current_exe()
+        .map(|exe| launcher_core::update::is_translocated(&exe))
+        .unwrap_or(false)
+}
+
+/// Ask the release feed whether a newer herdup exists.
+///
+/// Never blocks launching: the UI calls this a few seconds after first paint
+/// and ignores errors; only the "Check for updates" link shows them. The
+/// endpoint comes from settings so QA can point it at a local server.
+#[tauri::command]
+async fn check_for_update(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<UpdateCheckDto, String> {
+    let current_version = app.package_info().version.to_string();
+    let endpoint = launcher_core::update::endpoint(&Settings::load());
+    let url =
+        tauri::Url::parse(&endpoint).map_err(|e| format!("bad update endpoint {endpoint}: {e}"))?;
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![url])
+        .map_err(describe_update_error)?
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(describe_update_error)?;
+    let found = updater.check().await.map_err(describe_update_error)?;
+    let update = found.as_ref().map(|u| UpdateDto {
+        version: u.version.clone(),
+        notes: u.body.clone(),
+        translocated: running_translocated(),
+    });
+    *state.update.lock().map_err(|e| e.to_string())? = found;
+    Ok(UpdateCheckDto {
+        current_version,
+        update,
+    })
+}
+
+/// Download, verify against the embedded public key, replace the app, restart.
+///
+/// Progress goes out as `update-progress` events. On any failure the app is
+/// left untouched at the old version and the reason is returned.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let update = state.update.lock().map_err(|e| e.to_string())?.clone();
+    let Some(update) = update else {
+        return Err("check for updates first".into());
+    };
+    if running_translocated() {
+        return Err("Move herdup to Applications, then relaunch to install updates".into());
+    }
+    let on_chunk = {
+        let app = app.clone();
+        let mut downloaded: u64 = 0;
+        move |chunk: usize, total: Option<u64>| {
+            downloaded += chunk as u64;
+            let _ = app.emit(
+                "update-progress",
+                UpdateProgressDto {
+                    downloaded,
+                    total,
+                    installing: false,
+                },
+            );
+        }
+    };
+    let on_downloaded = {
+        let app = app.clone();
+        move || {
+            let _ = app.emit(
+                "update-progress",
+                UpdateProgressDto {
+                    downloaded: 0,
+                    total: None,
+                    installing: true,
+                },
+            );
+        }
+    };
+    update
+        .download_and_install(on_chunk, on_downloaded)
+        .await
+        .map_err(describe_update_error)?;
+    app.restart()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // A GUI app on macOS starts with launchd's four-directory PATH, which has
@@ -934,6 +1078,7 @@ pub fn run() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             list_templates,
@@ -953,6 +1098,8 @@ pub fn run() {
             attach_workspace,
             open_terminal,
             default_projects_root,
+            check_for_update,
+            install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running herdup");
