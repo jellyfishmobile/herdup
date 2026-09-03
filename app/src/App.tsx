@@ -97,9 +97,22 @@ export default function App() {
     api.listTemplates().then(setTemplates).catch((e) => setError(String(e)));
     api.listAddableRoles().then(setAddable).catch(() => setAddable([]));
     api.listClis().then(setClis).catch((e) => setError(String(e)));
-    api.listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([]));
     api.defaultProjectsRoot().then((root) => root && setProject((p) => p || root));
   }, []);
+
+  const refreshWorkspaces = useCallback(() => {
+    api.listWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([]));
+  }, []);
+
+  // Several projects can run side by side, so the first screen doubles as the
+  // place you see them. Poll while it is showing, otherwise a team that starts
+  // needing you never says so.
+  useEffect(() => {
+    if (step !== "project") return;
+    refreshWorkspaces();
+    const t = window.setInterval(refreshWorkspaces, 5000);
+    return () => window.clearInterval(t);
+  }, [step, refreshWorkspaces]);
 
   // The one warning belongs next to the choice that caused it, so version
   // control is checked the moment a folder is picked — not three screens later.
@@ -146,6 +159,23 @@ export default function App() {
     rememberProject(project);
     setRecents(readRecents());
     setStep("team");
+  };
+
+  /// Back to the start for another project, leaving the running team alone.
+  ///
+  /// Each launch gets its own herdr workspace, so several projects genuinely do
+  /// run side by side — this is only the UI catching up with that.
+  const startAnother = () => {
+    setPlan(null);
+    setReport(null);
+    setFirstRun([]);
+    setProgress([]);
+    setOutcome(null);
+    setSkip([]);
+    setOverrides([]);
+    setExtra([]);
+    setError(null);
+    setStep("project");
   };
 
   const toPreflight = () =>
@@ -279,7 +309,9 @@ export default function App() {
           />
         )}
 
-        {step === "launching" && <LaunchingStep progress={progress} />}
+        {step === "launching" && (
+          <LaunchingStep progress={progress} roles={(plan?.panes ?? []).map((p) => p.role)} />
+        )}
 
         {step === "done" && outcome && (
           <DoneStep
@@ -287,6 +319,7 @@ export default function App() {
             project={project}
             setOutcome={setOutcome}
             setError={setError}
+            onAnother={startAnother}
           />
         )}
       </main>
@@ -972,26 +1005,108 @@ function FirstRunStep(props: {
 // 5 · launching
 // ---------------------------------------------------------------------------
 
-function LaunchingStep(props: { progress: Progress[] }) {
+type Phase = "waiting" | "starting" | "ready" | "briefed" | "attention";
+
+/// What each teammate is doing while it waits for work.
+///
+/// Keyed by role with any trailing number stripped, so "Coder 1" and "Coder 2"
+/// share a line. Flavour only — the real state is the dot beside it.
+const IDLE_QUIP: Record<string, string> = {
+  pm: "deciding who does what",
+  lead: "deciding who does what",
+  dev: "cracking its knuckles",
+  developer: "cracking its knuckles",
+  coder: "cracking its knuckles",
+  reviewer: "putting its reading glasses on",
+  qa: "looking for something to break",
+  tester: "looking for something to break",
+  builds: "warming up the compiler",
+  research: "opening far too many tabs",
+};
+
+const quipFor = (role: string) =>
+  IDLE_QUIP[role.toLowerCase().replace(/\s*\d+$/, "")] ?? "waiting for orders";
+
+// Never witty about a problem: anything that needs a human reads plainly.
+const PHASE_TEXT: Record<Exclude<Phase, "ready" | "attention">, string> = {
+  waiting: "not started yet",
+  starting: "pulling up a chair",
+  briefed: "on it",
+};
+
+function LaunchingStep(props: { progress: Progress[]; roles: string[] }) {
   const last = props.progress.filter((p) => p.kind === "step").at(-1);
   const pct = last?.total ? Math.round(((last.index ?? 0) / last.total) * 100) : 0;
+
+  // Fold the event stream into one current state per teammate. The raw events
+  // carry herdr's own words and pane ids; none of that reaches the screen.
+  const state = new Map<string, { phase: Phase; note?: string }>();
+  for (const p of props.progress) {
+    if (!p.role) continue;
+    const set = (phase: Phase, note?: string) => state.set(p.role!, { phase, note });
+    if (p.kind === "pane_created") set("starting");
+    else if (p.kind === "pane_ready") set("ready");
+    else if (p.kind === "briefed") set("briefed");
+    else if (p.kind === "needs_attention" || p.kind === "briefing_withheld")
+      set("attention", p.detail ?? undefined);
+  }
+
+  const failure = props.progress.find((p) => p.kind === "failed");
+  const done = props.roles.filter((r) => state.get(r)?.phase === "briefed").length;
+  const headline =
+    pct < 40 ? "Rounding up the team" : pct < 85 ? "Handing out the work" : "Almost there";
+
   return (
     <section>
-      <h2>Getting everyone started</h2>
-      <p className="lede">This usually takes about twenty seconds.</p>
+      <h2>{failure ? "That didn't go to plan" : headline}</h2>
+      <p className="lede num">
+        {failure
+          ? "Everyone already started was left running — they may hold real work."
+          : `Twenty seconds, give or take. ${done} of ${props.roles.length} briefed.`}
+      </p>
+
       <div className="bar-track">
-        <div style={{ width: `${pct}%` }} />
+        <div style={{ width: `${failure ? 100 : pct}%` }} />
       </div>
-      <ul className="log">
-        {props.progress
-          .filter((p) => p.kind !== "step")
-          .map((p, i) => (
-            <li key={i}>
-              {p.role && <strong style={{ color: "var(--ink)" }}>{p.role}</strong>}
-              <span>{p.detail ?? p.kind.replace(/_/g, " ")}</span>
+
+      <ul className="rows">
+        {props.roles.map((role) => {
+          const s = state.get(role) ?? { phase: "waiting" as Phase };
+          const line =
+            s.phase === "attention"
+              ? (s.note ?? "needs you")
+              : s.phase === "ready"
+                ? quipFor(role)
+                : PHASE_TEXT[s.phase];
+          return (
+            <li key={role}>
+              <strong>{role}</strong>
+              <span className="grow muted">{line}</span>
+              <span
+                className={`state ${
+                  s.phase === "briefed"
+                    ? "ok"
+                    : s.phase === "attention"
+                      ? "warn"
+                      : s.phase === "waiting"
+                        ? ""
+                        : "busy"
+                }`}
+              >
+                {s.phase === "briefed"
+                  ? "working"
+                  : s.phase === "attention"
+                    ? "needs you"
+                    : s.phase === "waiting"
+                      ? "queued"
+                      : "starting"}
+              </span>
             </li>
-          ))}
+          );
+        })}
       </ul>
+
+      {failure?.detail && <div className="errbox">{failure.detail}</div>}
     </section>
   );
 }
@@ -1005,6 +1120,7 @@ function DoneStep(props: {
   project: string;
   setOutcome: (o: Outcome) => void;
   setError: (e: string | null) => void;
+  onAnother: () => void;
 }) {
   const o = props.outcome;
   const release = (index: number) =>
@@ -1064,8 +1180,15 @@ function DoneStep(props: {
         Open the team
         <span aria-hidden>→</span>
       </button>
+
+      {/* This team keeps running. Several projects can go at once. */}
+      <div className="actions" style={{ justifyContent: "center" }}>
+        <button className="btn" data-testid="start-another" onClick={props.onAnother}>
+          Start another project
+        </button>
+      </div>
       <p className="note">
-        Or run <code>herdr --session {o.session}</code> yourself.
+        They keep working while you do. Or run <code>herdr --session {o.session}</code> yourself.
       </p>
     </section>
   );

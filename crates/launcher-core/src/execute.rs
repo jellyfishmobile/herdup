@@ -35,16 +35,18 @@ pub enum AttentionReason {
 }
 
 impl AttentionReason {
+    /// Shown verbatim in the launcher, so it is written for someone who has
+    /// never heard of herdr: no panes, no jargon. See DESIGN.md.
     pub fn explain(self) -> &'static str {
         match self {
             AttentionReason::Blocked => {
-                "the pane is waiting on you — a login, a permission prompt, or a \
-                 first-run 'trust this folder' prompt"
+                "it is waiting on you — a sign-in, a permission prompt, or a \
+                 'do you trust this folder?' question"
             }
-            AttentionReason::Timeout => "the CLI did not reach its prompt in time",
+            AttentionReason::Timeout => "it did not finish starting up in time",
             AttentionReason::UnverifiedCli => {
-                "this CLI's blocked-detection has not been verified, so herdup will \
-                 not type into it unattended"
+                "herdup cannot yet reliably tell when this tool is stuck, so it \
+                 will not type into it unattended"
             }
         }
     }

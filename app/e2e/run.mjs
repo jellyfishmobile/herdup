@@ -88,6 +88,36 @@ async function setProject(path) {
   return input;
 }
 
+/// herdr's vocabulary must never reach the screen. `<code>` is exempt: the last
+/// screen deliberately offers the raw `herdr --session …` command as an escape
+/// hatch for people who do want it.
+const BANNED = [
+  [/\bpanes?\b/i, "pane"],
+  [/\bw\d+:[pt]\d+\b/i, "a raw pane id like w1:p1"],
+  [/\bbriefings?\b/i, "briefing"],
+  [/\bworkspaces?\b/i, "workspace"],
+  [/\btemplates?\b/i, "template"],
+];
+
+async function checkVocabulary(where) {
+  const text = await session.execute(`
+    const main = document.querySelector('main');
+    if (!main) return '';
+    const clone = main.cloneNode(true);
+    for (const c of clone.querySelectorAll('code')) c.remove();
+    return clone.innerText || '';
+  `);
+  // "Your workspace" is the caption over the picture of the team; it is the one
+  // survivor, and it means the ordinary English word.
+  const cleaned = String(text).replace(/your workspace/gi, "");
+  const hit = BANNED.find(([re]) => re.test(cleaned));
+  check(
+    `no herdr vocabulary on the ${where}`,
+    !hit,
+    hit ? `found ${hit[1]}` : "",
+  );
+}
+
 async function main() {
   console.log(`app:    ${APP}`);
   console.log(`driver: ${EDGE_DRIVER}`);
@@ -151,6 +181,11 @@ async function main() {
   const gated = await session.waitFor('[data-testid="preflight-next"]');
   check("launch is gated until the warning is acknowledged", !(await gated.enabled()));
 
+  // The launcher is for people who have never heard of herdr, so its own
+  // vocabulary must never reach the screen (DESIGN.md). This caught raw pane
+  // ids like "w1:p1" and the phrase "pane ready" being dumped into the UI.
+  await checkVocabulary("check screen");
+
   const ack = await session.waitFor('[data-testid="ack-0"]');
   await ack.click();
   await sleep(300);
@@ -186,6 +221,8 @@ async function main() {
   // the thing the user can actually see.
   const leadLane = await session.find("main .lane.lead");
   check("the lead is distinguished from the rest of the team", leadLane !== null);
+
+  await checkVocabulary("team screen");
 
   // Removing a teammate must drop the one that was pointed at. The compacted
   // index shifts after the first removal, so this is the case that used to
