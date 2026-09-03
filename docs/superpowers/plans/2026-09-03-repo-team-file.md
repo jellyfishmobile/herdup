@@ -43,7 +43,7 @@ Order and ownership: Task 1 and Task 2 (core, coder-1) first. Task 5 (frontend, 
 - Modify: `crates/launcher-core/src/template.rs`
 - Test: `crates/launcher-core/tests/repo_team.rs` (create)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `crates/launcher-core/tests/repo_team.rs`:
 
@@ -193,12 +193,12 @@ fn with_repo_team_offers_it_under_repo_and_replaces_an_earlier_one() {
 }
 ```
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
 Run: `cargo test -p launcher-core --test repo_team`
 Expected: compile errors: `unresolved imports` for `load_repo_team`, `parse_repo_team`, `REPO_TEAM_FILE`, `REPO_TEMPLATE_ID`, and `no variant named Io`.
 
-- [ ] **Step 3: The error variant**
+- [x] **Step 3: The error variant**
 
 In `crates/launcher-core/src/config.rs`, inside `pub enum ConfigError`, directly after the `Toml` variant:
 
@@ -211,7 +211,7 @@ In `crates/launcher-core/src/config.rs`, inside `pub enum ConfigError`, directly
     },
 ```
 
-- [ ] **Step 4: The loader**
+- [x] **Step 4: The loader**
 
 In `crates/launcher-core/src/template.rs`, after the `BUILTIN`/`ADDABLE` constants:
 
@@ -342,14 +342,14 @@ fn validate_clis(template: &Template, registry: &Registry) -> Result<()> {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cargo test -p launcher-core --test repo_team`
 Expected: `test result: ok. 9 passed`.
 
 If `a_wrapping_key_is_rejected_and_named` fails because the TOML error names `pane` (missing field) before `squad` (unknown field): put the wrapping key **after** a valid bare body in that test instead — `format!("{VALID}\n[squad]\nx = 1\n")` — so the unknown table is what the parser trips on, and keep the assertion that the message contains `squad`.
 
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 cargo fmt --all
@@ -366,7 +366,7 @@ git commit -m "Load a repository's own team from .herdr/team.toml" -- crates/lau
 - Modify: `crates/launcher-core/src/config.rs` (after `load_templates_from`)
 - Test: `crates/launcher-core/tests/repo_team.rs` (append)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `crates/launcher-core/tests/repo_team.rs`:
 
@@ -451,12 +451,12 @@ fn a_repo_team_plans_like_the_same_builtin() {
 
 If `SplitDirection` does not print as `Right`/`Down` under `{:?}`, or `PlannedPane` names its fields differently, adjust those two spots to the real names in `crates/launcher-core/src/plan.rs` and `herdr/types.rs`; the intent is a byte-for-byte same pane list.
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `cargo test -p launcher-core --test repo_team`
 Expected: `unresolved import launcher_core::config::load_templates_for`.
 
-- [ ] **Step 3: The helper**
+- [x] **Step 3: The helper**
 
 In `crates/launcher-core/src/config.rs`, after `load_templates_from`:
 
@@ -480,12 +480,12 @@ pub fn load_templates_for(
 }
 ```
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `cargo test -p launcher-core --test repo_team`
 Expected: `test result: ok. 13 passed`.
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 cargo fmt --all
@@ -503,7 +503,7 @@ git commit -m "Merge a project's own team over the templates for a launch" -- cr
 
 Verification is clippy plus the workspace tests, as for every Tauri-layer task; Task 6 exercises it.
 
-- [ ] **Step 1: DTO fields**
+- [x] **Step 1: DTO fields**
 
 Add to `TemplateDto`:
 
@@ -520,7 +520,7 @@ Add to `ProjectStatusDto`:
     team_file: Option<String>,
 ```
 
-- [ ] **Step 2: A DTO builder and the listing**
+- [x] **Step 2: A DTO builder and the listing**
 
 Replace `list_templates` with:
 
@@ -562,7 +562,7 @@ fn list_templates(project: Option<String>) -> Result<Vec<TemplateDto>, String> {
 }
 ```
 
-- [ ] **Step 3: Project status reports a bad file**
+- [x] **Step 3: Project status reports a bad file**
 
 In `project_status`, inside the `spawn_blocking` closure, before building the DTO:
 
@@ -579,7 +579,7 @@ In `project_status`, inside the `spawn_blocking` closure, before building the DT
 
 and add `team_file,` to the `ProjectStatusDto { … }` literal.
 
-- [ ] **Step 4: Planning resolves `repo` against the project**
+- [x] **Step 4: Planning resolves `repo` against the project**
 
 In `build_plan_inner`, replace
 
@@ -615,7 +615,7 @@ with
     };
 ```
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 cargo fmt --all
@@ -631,7 +631,7 @@ git commit -m "Offer a project's own team in the app and resolve repo against th
 **Files:**
 - Modify: `crates/launcher-cli/src/main.rs` — usage text (`:93-95`), `show_plan` (`:208-225`), `show_preflight` (`:305-322`), `launch` (`:462-483`), `template_ids` (`:293`)
 
-- [ ] **Step 1: One resolver for the three commands**
+- [x] **Step 1: One resolver for the three commands**
 
 Directly above `fn template_ids`:
 
@@ -670,7 +670,7 @@ fn resolve_template(
 
 If `AppError` does not convert from `ConfigError` with `?` here, wrap with the same conversion the surrounding commands use for `load_templates(&registry)?`. The `exit(2)` makes an unknown or unloadable template a non-zero exit, which the spec asks for and the earlier code did not do; keep the `Ok(None)` type so the signature reads honestly even though the early return never happens in practice — or, simpler, return `Result<launcher_core::template::Template, AppError>` and drop the `Option`; pick one and be consistent in the three call sites below.
 
-- [ ] **Step 2: Use it in `plan`, `preflight`, `launch`**
+- [x] **Step 2: Use it in `plan`, `preflight`, `launch`**
 
 In each of the three commands, replace the pair
 
@@ -693,7 +693,7 @@ with
 
 using the verb `plan`, `preflight`, `launch` respectively, and make sure `cwd` is computed before the call (it already is in all three). `LaunchRequest::new(&cwd, template)` takes a reference: pass `&template`.
 
-- [ ] **Step 3: Usage text**
+- [x] **Step 3: Usage text**
 
 Where the usage string lists `--template ID`, add one line under the launch usage:
 
@@ -701,7 +701,7 @@ Where the usage string lists `--template ID`, add one line under the launch usag
          `--template repo` uses the project's own .herdr/team.toml
 ```
 
-- [ ] **Step 4: Verify by hand and commit**
+- [x] **Step 4: Verify by hand and commit**
 
 ```bash
 cargo fmt --all
@@ -724,7 +724,7 @@ git commit -m "CLI: --template repo resolves the project's own team" -- crates/l
 - Modify: `app/src/App.tsx` (state effects `:136-142` and `:160-170`, the `TeamStep` props and `presets` `:696-720`, the segment buttons `:830-840`)
 - Modify: `app/src/styles.css` (append)
 
-- [ ] **Step 1: Types and the call**
+- [x] **Step 1: Types and the call**
 
 In `app/src/api.ts`, add to `Template`:
 
@@ -747,7 +747,7 @@ Change the listing call:
     invoke<Template[]>("list_templates", { project }),
 ```
 
-- [ ] **Step 2: Re-list when the project changes, and preselect**
+- [x] **Step 2: Re-list when the project changes, and preselect**
 
 In `App()`, remove the `api.listTemplates()` line from the mount effect and add, after the project-status effect:
 
@@ -774,7 +774,7 @@ In `App()`, remove the `api.listTemplates()` line from the mount effect and add,
 
 Pass `status` into the team step: add `status={status}` where `<TeamStep` is rendered, and `status: ProjectStatus | null;` to its props.
 
-- [ ] **Step 3: Order, tag, error line**
+- [x] **Step 3: Order, tag, error line**
 
 In `TeamStep`, replace `presets`:
 
@@ -806,7 +806,7 @@ Directly after the closing `</div>` of the `.seg` block:
       )}
 ```
 
-- [ ] **Step 4: Style**
+- [x] **Step 4: Style**
 
 Append to `app/src/styles.css`:
 
@@ -814,7 +814,7 @@ Append to `app/src/styles.css`:
 .segbtn .tag.repo { margin-left: 6px; border-color: var(--acc-line); color: var(--acc); }
 ```
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `cd app && npm run build`
 Expected: `tsc` silent; vite `✓ built`. Until Task 3 lands, the running app's `list_templates` ignores the `project` argument and `team_file` is absent, which is harmless.
@@ -829,11 +829,11 @@ git commit -m "Team step: offer the repository's own team first" -- app/src/api.
 
 Needs Tasks 1–5 on main. Build once with `cargo tauri dev` on the isolated session (`HERDUP_SESSION=herdup-qa`) as in the update work; every click and every look is the user's.
 
-- [ ] **Step 1: Fixtures**
+- [x] **Step 1: Fixtures**
 
 Create three scratch project folders: `good` with the `VALID` team from Task 1 and no `display_name`; `bad` with `display_name = 1`; `plain` with no file. `git init` each so the project step does not warn about version control.
 
-- [ ] **Step 2: CLI**
+- [x] **Step 2: CLI**
 
 ```bash
 cargo run -q -p launcher-cli -- plan --template repo --cwd <good>    # two panes, exit 0, title is the folder name
@@ -842,11 +842,11 @@ cargo run -q -p launcher-cli -- plan --template repo --cwd <plain>   # "no .herd
 cargo run -q -p launcher-cli -- plan --template squad --cwd <good>   # built-ins still work there
 ```
 
-- [ ] **Step 3: GUI, reported by the user**
+- [x] **Step 3: GUI, reported by the user**
 
 Pick `good`: the team step shows the folder's name first with a *this repo* tag and it is selected; Solo, Duo, Squad, Full team follow. Pick `bad`: no repo entry, a warning line *.herdr/team.toml: …* under the sizes, Squad selected. Pick `plain`: no line, Squad selected. Go back from `good` to `plain`: the selection returns to Squad.
 
-- [ ] **Step 4: Record**
+- [x] **Step 4: Record**
 
 Add the outcome to the plan doc's Phase list as Phase 11 in the style of Phase 10, and update the README status table, in one docs commit.
 

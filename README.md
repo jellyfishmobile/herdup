@@ -110,6 +110,7 @@ before completing a launch, so it starts no agents. See
 | 8 GitHub new-repo | done — verified live: created, cloned and deleted a throwaway repo |
 | 9 packaging | `.msi` builds and validates; **never installed on a clean machine** |
 | 10 in-app update | verified end to end on macOS against a local feed (2026-09-03): the banner appeared four seconds after launch, Install showed progress, the app restarted into 0.1.1 with a valid ad-hoc signature and no quarantine flag, a tampered download was refused with "the download did not verify; nothing was installed" and the app stayed at 0.1.0, the startup check against the real feed (private repo, 404) stayed silent, the manual check said "could not check: no published release", and the top bar showed the running version. Not verified: the translocation text, Windows, Linux; **first real signed release not yet published** |
+| 11 per-repo team file | verified on macOS (2026-09-03/04): the CLI plans a repo team and exits 0 with the folder name as the title, reports an invalid file and exits 2, says "no .herdr/team.toml in …" for a project without one, and still launches a built-in team into a project that has one; in the app the repo team is listed first with a *this repo* tag and preselected, an invalid file shows a warning line with Squad selected, and a project without one is unchanged |
 | macOS | built and run on macOS 26, Apple silicon (2026-09-03): 182 tests, the CLI smoke against herdr 0.8.2, the Terminal.app handoff and the packaged app launching are all verified; **the GUI flow itself has not been driven on a Mac** — tauri-driver has no macOS backend |
 
 A full six-agent team has been launched end to end on Windows: 75 s, all six
@@ -129,6 +130,27 @@ so that herdr, `gh` and the agent CLIs resolve exactly as they do in a terminal.
 
 User values merge over the built-ins, so upgrading does not clobber your edits.
 `launcher-cli config` prints the merged result.
+
+### Team file
+
+A repository can carry its own team in `.herdr/team.toml`, committed with the
+code. The top level *is* the team — no wrapping key — and the panes are exactly
+those of `templates.toml`:
+
+```toml
+display_name = "herdup squad"   # optional; defaults to the folder name
+description  = "PM and one coder"
+
+[[pane]]
+role     = "PM"
+cli      = "claude"
+briefing = "You coordinate this team."
+```
+
+Pick that project and its team is listed first, tagged as from this repository
+and already selected; the built-in teams stay below it and stay usable. An
+invalid file is reported on the team step and never blocks a built-in team. In
+the CLI it is `--template repo`.
 
 ## Design
 

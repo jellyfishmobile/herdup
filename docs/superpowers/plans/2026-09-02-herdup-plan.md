@@ -508,6 +508,31 @@ not to the document, so a hand-added `update_endpoint` must go at the top of
 
 ---
 
+## Phase 11 — per-repo team file · S
+
+**Do** — a repository's `.herdr/team.toml`, loaded as a full template under the
+id `repo`, offered first in the team step with a *this repo* tag and
+preselected, and resolved by `--template repo` in the CLI. An invalid file is
+reported inline and never blocks a built-in team. Design:
+[`docs/superpowers/specs/2026-09-03-repo-team-file-design.md`](../specs/2026-09-03-repo-team-file-design.md).
+
+**Tests** — the loader, the folder-name default and every rejected shape as
+pure functions; the merge over built-ins and its error slot; a repo team plans
+identically to the same built-in. The GUI is verified by eye.
+
+**Exit — BUILT AND VERIFIED 2026-09-03/04.**
+
+- [x] CLI, by QA: a valid file planned two panes and exited 0 with the folder
+      name as the title; an invalid one printed the loader's message and exited
+      2; a project without one printed "no .herdr/team.toml in …" and exited 2;
+      and `--template squad` still launched into the project that had a file.
+- [x] GUI, by the user: with a valid file the repo team was listed first with a
+      *this repo* tag and selected, the built-ins below it; with an invalid one
+      a warning line appeared under the sizes and Squad was selected; with no
+      file there was no line, and the selection followed the folder.
+
+---
+
 ## Manual verification checklist
 
 Automated tests cannot cover these. Run on **both** OSes.
@@ -541,6 +566,12 @@ Not in this plan; revisit once the launcher is proven.
 
 - Native GitHub OAuth device flow (spec §3 — `gh` covers it)
 - Disk-scanning project browser
-- Committed per-repo `.herdr/team.toml`
+- ~~Committed per-repo `.herdr/team.toml`~~ — built and verified, Phase 11
 - Saving a running workspace back out as a template
-- Verified flag presets for the other 17 CLIs — added as they're confirmed, not guessed
+- ~~Verified flag presets for the other 17 CLIs~~ — partly done. hermes
+  (`--yolo`) and agy (`--dangerously-skip-permissions`) were verified
+  2026-09-03 by the agreed bar: the flag in `--help`, then a real launch
+  reaching a ready prompt. gemini, cursor, kilo and pi still ship nothing —
+  gemini's `--approval-mode` exists but the launch was blocked by trust and
+  auth dialogs, cursor needs a login, and kilo and pi have no such flag. The
+  remainder are added as they are confirmed, not guessed.
