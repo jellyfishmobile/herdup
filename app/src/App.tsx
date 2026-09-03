@@ -12,6 +12,8 @@ import {
   type Progress,
   type ProjectStatus,
   type Template,
+  type UpdateInfo,
+  type UpdateProgress,
   type Workspace,
 } from "./api";
 
@@ -20,6 +22,12 @@ import {
 // "needs you". The backend keeps its own names; the translation happens here.
 
 type Step = "project" | "team" | "preflight" | "firstrun" | "launching" | "done";
+
+type UpdateNote =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "current"; version: string }
+  | { kind: "failed"; reason: string };
 
 const RECENTS_KEY = "herdup.recentProjects";
 const MAX_RECENTS = 4;
@@ -87,6 +95,34 @@ export default function App() {
   const [progress, setProgress] = useState<Progress[]>([]);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Self-update. The startup check waits until the window has painted and is
+  // silent on failure; only the topbar link reports why a check failed.
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [updateNote, setUpdateNote] = useState<UpdateNote>({ kind: "idle" });
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      api
+        .checkForUpdate()
+        .then((r) => r.update && setUpdate(r.update))
+        .catch(() => {});
+    }, 3000);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const checkForUpdateNow = useCallback(() => {
+    setUpdateNote({ kind: "checking" });
+    setUpdateDismissed(false);
+    api
+      .checkForUpdate()
+      .then((r) => {
+        setUpdate(r.update);
+        setUpdateNote(r.update ? { kind: "idle" } : { kind: "current", version: r.current_version });
+      })
+      .catch((e) => setUpdateNote({ kind: "failed", reason: String(e) }));
+  }, []);
 
   const options: LaunchOptions = useMemo(
     () => ({ project, template: templateId, skip, overrides, extra }),
@@ -220,11 +256,35 @@ export default function App() {
     <div className="app">
       <div className="topbar">
         <span className="mark">herdup</span>
-        <span className="dots" aria-hidden>
-          <i className={dot === 1 ? "on" : "done"} />
-          <i className={dot === 2 ? "on" : ""} />
+        <span className="topbar-right">
+          <button
+            className="linkbtn"
+            onClick={checkForUpdateNow}
+            disabled={updateNote.kind === "checking"}
+            data-testid="check-updates"
+          >
+            {updateNote.kind === "checking" ? "checking…" : "Check for updates"}
+          </button>
+          <span className="dots" aria-hidden>
+            <i className={dot === 1 ? "on" : "done"} />
+            <i className={dot === 2 ? "on" : ""} />
+          </span>
         </span>
       </div>
+
+      {updateNote.kind === "current" && (
+        <p className="state ok" style={{ marginBottom: 14 }} data-testid="update-current">
+          up to date ({updateNote.version})
+        </p>
+      )}
+      {updateNote.kind === "failed" && (
+        <p className="state warn" style={{ marginBottom: 14 }} data-testid="update-failed">
+          could not check: {updateNote.reason}
+        </p>
+      )}
+      {update && !updateDismissed && (
+        <UpdateBanner update={update} onDismiss={() => setUpdateDismissed(true)} />
+      )}
 
       {error && (
         <div className="errbox" role="alert" data-testid="error">
@@ -1193,3 +1253,58 @@ function DoneStep(props: {
     </section>
   );
 }
+
+type UpdateBannerProps = { update: UpdateInfo; onDismiss: () => void };
+
+/// One line under the topbar. Install shows download progress here, then the
+/// app restarts on its own; a failure shows its reason and leaves the buttons.
+function UpdateBanner({ update, onDismiss }: UpdateBannerProps) {
+  const [progress, setProgress] = useState<UpdateProgress | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unlisten = api.onUpdateProgress(setProgress);
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
+  const install = () => {
+    setBusy(true);
+    setFailure(null);
+    api.installUpdate().catch((e) => {
+      setFailure(String(e));
+      setBusy(false);
+      setProgress(null);
+    });
+  };
+
+  let line: string;
+  if (failure) line = failure;
+  else if (progress?.installing) line = "installing…";
+  else if (progress)
+    line = progress.total
+      ? `downloading ${mb(progress.downloaded)} of ${mb(progress.total)} MB`
+      : `downloading ${mb(progress.downloaded)} MB`;
+  else if (update.translocated) line = "Move herdup to Applications, then relaunch to install updates";
+  else line = `herdup ${update.version} is available`;
+
+  return (
+    <div className="updatebar" role="status" data-testid="update-banner">
+      <span className="grow">{line}</span>
+      {!update.translocated && !busy && (
+        <button className="btn solid" onClick={install} data-testid="update-install">
+          Install and restart
+        </button>
+      )}
+      {!busy && (
+        <button className="btn quiet" onClick={onDismiss} data-testid="update-dismiss">
+          Not now
+        </button>
+      )}
+    </div>
+  );
+}
+
+const mb = (bytes: number) => (bytes / 1_048_576).toFixed(1);

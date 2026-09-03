@@ -162,6 +162,26 @@ export type LaunchOptions = {
 
 export type CreatedRepo = { url: string | null; path: string };
 
+/// A newer herdup found on the release feed.
+export type UpdateInfo = {
+  version: string;
+  notes: string | null;
+  /// macOS mounted this copy read-only from a quarantined download; it must
+  /// be moved to Applications before it can replace itself.
+  translocated: boolean;
+};
+
+export type UpdateCheck = {
+  current_version: string;
+  update: UpdateInfo | null;
+};
+
+export type UpdateProgress = {
+  downloaded: number;
+  total: number | null;
+  installing: boolean;
+};
+
 export const api = {
   ghOwners: () => invoke<string[]>("gh_owners"),
   createRepo: (args: {
@@ -190,4 +210,8 @@ export const api = {
     invoke<string>("attach_workspace", { workspaceId, path }),
   defaultProjectsRoot: () => invoke<string | null>("default_projects_root"),
   onProgress: (fn: (p: Progress) => void) => listen<Progress>("launch-progress", (e) => fn(e.payload)),
+  checkForUpdate: () => invoke<UpdateCheck>("check_for_update"),
+  installUpdate: () => invoke<void>("install_update"),
+  onUpdateProgress: (fn: (p: UpdateProgress) => void) =>
+    listen<UpdateProgress>("update-progress", (e) => fn(e.payload)),
 };
