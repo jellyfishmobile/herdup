@@ -20,7 +20,21 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 
-const SESSION: &str = "herdup";
+const DEFAULT_SESSION: &str = "herdup";
+
+/// The herdr session herdup owns.
+///
+/// Overridable via `HERDUP_SESSION` so the test harness and the screenshot
+/// capture can run against an isolated session. A named session gets its own
+/// socket *and* its own state directory, so an override cannot see — or be
+/// seen by — the teams a real user is running. That isolation is also why the
+/// published screenshots never contain somebody's actual project.
+fn session() -> String {
+    std::env::var("HERDUP_SESSION")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_SESSION.to_string())
+}
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -220,7 +234,7 @@ pub struct AppState {
 
 fn client() -> Result<HerdrCli, String> {
     HerdrCli::discover()
-        .map(|c| c.with_session(SESSION))
+        .map(|c| c.with_session(session()))
         .map_err(|e| e.to_string())
 }
 
@@ -736,7 +750,7 @@ fn outcome_dto(outcome: &Outcome) -> OutcomeDto {
         briefed: outcome.briefed(),
         failure: outcome.failure.as_ref().map(|f| f.message.clone()),
         failed_step: outcome.failure.as_ref().map(|f| f.description.clone()),
-        session: SESSION.into(),
+        session: session(),
     }
 }
 
@@ -837,7 +851,7 @@ async fn attach_workspace(workspace_id: String, path: Option<String>) -> Result<
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
         match launcher_core::terminal::open_with_fallback(
             &dir,
-            Some(SESSION),
+            Some(&session()),
             settings.terminal.as_deref(),
         ) {
             Ok(h) => Ok(h.display()),
@@ -860,7 +874,7 @@ fn open_terminal_blocking(project: String) -> Result<String, String> {
     let path = PathBuf::from(project);
     match launcher_core::terminal::open_with_fallback(
         &path,
-        Some(SESSION),
+        Some(&session()),
         settings.terminal.as_deref(),
     ) {
         Ok(h) => Ok(h.display()),

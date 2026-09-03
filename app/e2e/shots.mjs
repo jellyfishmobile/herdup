@@ -7,9 +7,8 @@
 // screens that were designed.
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join, resolve, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { newSession, sleep, waitForDriver } from "./webdriver.mjs";
 
@@ -26,8 +25,25 @@ const OUT = process.argv[2] ?? join(process.cwd(), "e2e", "shots");
 let driver = null;
 let session = null;
 
+/// Where the demo project lives.
+///
+/// Deliberately NOT a temp directory: the path is visible in every screenshot,
+/// and `%TEMP%` on Windows contains the account name — publishing that on a
+/// landing page leaks the username and reads like a scratch folder. A sibling
+/// of the repo gives a short, ordinary-looking path with nothing personal in
+/// it. Never reuses an existing folder, and only removes what it created.
+function demoPath() {
+  const parent = resolve(process.cwd(), '..', '..'); // the folder holding the repo, e.g. D:\work
+  for (const name of ["my-app", "my-app-demo", "herdup-demo-project"]) {
+    const candidate = join(parent, name);
+    if (!existsSync(candidate)) return candidate;
+  }
+  throw new Error(`no free demo folder under ${parent}; move or rename my-app*`);
+}
+
 function makeCleanRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "herdup-shot-"));
+  const dir = demoPath();
+  mkdirSync(dir, { recursive: true });
   const git = (...args) => execFileSync("git", args, { cwd: dir, stdio: "ignore" });
   git("init", "-q");
   git("config", "user.email", "shots@example.com");
@@ -49,12 +65,27 @@ async function main() {
   if (!existsSync(APP)) throw new Error(`build first: cargo tauri build`);
   mkdirSync(OUT, { recursive: true });
 
+  // Run against an isolated herdr session. A named session gets its own socket
+  // AND its own state dir, so the "Already running" list stays empty and these
+  // published images can never contain somebody's real project.
+  process.env.HERDUP_SESSION = "herdup-shots";
+
   driver = spawn(TAURI_DRIVER, ["--native-driver", EDGE_DRIVER], { stdio: "ignore" });
   await waitForDriver();
   session = await newSession(APP);
   await sleep(2500);
 
   const repo = makeCleanRepo();
+
+  // The app remembers recent projects per machine. Anything left by an earlier
+  // run would show up in the list — and these images get published, so start
+  // from an empty list every time.
+  try {
+    await session.execute("localStorage.clear(); location.reload();");
+    await sleep(2500);
+  } catch {
+    /* older driver without execute — the list is usually empty anyway */
+  }
 
   await shot("1-project-empty");
 
