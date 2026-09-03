@@ -611,3 +611,16 @@ main section.direction { padding: 28px 24px 32px; }
   .fg-body { fill: #8994ad; }
   .belt-top { fill: #262c38; }
 }
+
+
+/* The category claim leads; the attention argument is the deeper second beat.
+   It reads as a heading in its own right rather than competing with the h2. */
+.sub-thesis {
+  font-size: clamp(21px, 2.6vw, 28px);
+  letter-spacing: -0.03em;
+  font-weight: 700;
+  margin: 36px 0 14px;
+  padding-top: 28px;
+  border-top: 1px solid var(--rule);
+  text-wrap: balance;
+}
