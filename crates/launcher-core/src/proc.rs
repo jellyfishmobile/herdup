@@ -48,10 +48,12 @@ const LOGIN_SHELL_DEADLINE: Duration = Duration::from_secs(5);
 
 /// The most output the probe reads before giving up.
 ///
-/// The PATH is a few kilobytes at most. An rc file that streams output (a
-/// runaway `yes`, a log tail) must not become unbounded memory in a GUI
+/// The PATH is a few kilobytes at most, but rc files have been seen to print
+/// banners of a couple of megabytes before it, and those must still yield a
+/// PATH. Eight MiB leaves room for them while an rc file that streams output
+/// (a runaway `yes`, a log tail) still cannot become unbounded memory in a GUI
 /// process.
-const LOGIN_SHELL_OUTPUT_CAP: usize = 1 << 20;
+const LOGIN_SHELL_OUTPUT_CAP: usize = 8 << 20;
 
 /// The PATH the user's login shell would have.
 ///
@@ -146,13 +148,21 @@ fn read_until_marker(mut stdout: impl Read, end: &[u8], deadline: Instant) -> St
     let mut buf = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
-        match stdout.read(&mut chunk) {
+        let n = match stdout.read(&mut chunk) {
             Ok(0) => break,
-            Ok(n) => buf.extend_from_slice(&chunk[..n]),
+            Ok(n) => n,
             Err(e) if e.kind() == ErrorKind::Interrupted => continue,
             Err(_) => break,
-        }
-        if contains(&buf, end) || buf.len() > LOGIN_SHELL_OUTPUT_CAP || Instant::now() >= deadline {
+        };
+        buf.extend_from_slice(&chunk[..n]);
+        // Only the new bytes are scanned, plus enough of the old ones for a
+        // marker split across two reads. Rescanning everything made a large
+        // banner quadratic, which the cap above would turn into seconds.
+        let from = buf.len().saturating_sub(n + end.len() - 1);
+        if contains(&buf[from..], end)
+            || buf.len() > LOGIN_SHELL_OUTPUT_CAP
+            || Instant::now() >= deadline
+        {
             break;
         }
     }
@@ -292,6 +302,65 @@ mod tests {
         // The shell died (or was killed) before the end marker.
         let cut = format!("{}{PATH}", m.begin);
         assert_eq!(path_between_markers(&cut, &m), None);
+    }
+
+    #[test]
+    fn a_marker_split_across_two_reads_is_still_found() {
+        use super::{read_until_marker, LOGIN_SHELL_OUTPUT_CAP};
+        use std::time::{Duration, Instant};
+        // A 4 KiB chunk boundary falls inside the end marker.
+        let m = markers();
+        let text = format!(
+            "{}{}{PATH}{}",
+            "b".repeat(4096 - m.begin.len() - PATH.len() - 3),
+            m.begin,
+            m.end
+        );
+        let out = read_until_marker(
+            text.as_bytes(),
+            m.end.as_bytes(),
+            Instant::now() + Duration::from_secs(5),
+        );
+        assert_eq!(path_between_markers(&out, &m), Some(PATH));
+        assert!(text.len() < LOGIN_SHELL_OUTPUT_CAP);
+    }
+
+    #[test]
+    fn a_two_mebibyte_banner_fits_under_the_cap() {
+        use super::{read_until_marker, LOGIN_SHELL_OUTPUT_CAP};
+        use std::time::{Duration, Instant};
+        // QA's rc file printed a 2 MB banner before the PATH; the old 1 MiB cap
+        // abandoned it.
+        let banner = "x".repeat(2 << 20);
+        let text = format!("{banner}{}", wrapped(PATH));
+        assert!(text.len() < LOGIN_SHELL_OUTPUT_CAP);
+        let out = read_until_marker(
+            text.as_bytes(),
+            markers().end.as_bytes(),
+            Instant::now() + Duration::from_secs(5),
+        );
+        assert_eq!(path_between_markers(&out, &markers()), Some(PATH));
+    }
+
+    #[test]
+    fn output_past_the_cap_is_abandoned() {
+        use super::{read_until_marker, LOGIN_SHELL_OUTPUT_CAP};
+        use std::io::Cursor;
+        use std::time::{Duration, Instant};
+        // Endless output without a marker: the reader must stop near the cap,
+        // not read until the deadline or the heap gives out.
+        let endless = Cursor::new(vec![b'y'; LOGIN_SHELL_OUTPUT_CAP + (1 << 20)]);
+        let out = read_until_marker(
+            endless,
+            markers().end.as_bytes(),
+            Instant::now() + Duration::from_secs(60),
+        );
+        assert!(
+            out.len() > LOGIN_SHELL_OUTPUT_CAP && out.len() <= LOGIN_SHELL_OUTPUT_CAP + 4096,
+            "{}",
+            out.len()
+        );
+        assert_eq!(path_between_markers(&out, &markers()), None);
     }
 
     #[test]
@@ -475,6 +544,21 @@ mod tests {
                 "took {elapsed:?}: waited for .zlogout"
             );
             scratch.assert_shell_gone();
+        }
+
+        #[test]
+        fn a_two_megabyte_banner_still_yields_the_path() {
+            if !zsh_present() {
+                return;
+            }
+            let scratch = Scratch::new("big-banner");
+            scratch.write(".zshrc", "head -c 2097152 /dev/zero | tr '\\0' x\n");
+            let (path, elapsed) = probe(&scratch, LOGIN_SHELL_DEADLINE);
+            assert!(
+                path.as_deref().is_some_and(|p| p.starts_with('/')),
+                "{path:?}"
+            );
+            assert!(elapsed < Duration::from_secs(2), "took {elapsed:?}");
         }
 
         #[test]
