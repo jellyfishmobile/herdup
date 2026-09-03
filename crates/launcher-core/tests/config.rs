@@ -135,6 +135,26 @@ fn only_verified_clis_may_be_auto_briefed() {
     assert!(!gemini.briefing_trust.may_auto_brief());
 }
 
+/// Presets verified by the agreed bar: the flag in `--help`, then a real launch
+/// reaching a ready prompt in an isolated herdr 0.8.2 session.
+///
+/// claude: 2026-09-02. hermes and agy: 2026-09-03, macOS; neither has an
+/// edits-only flag. gemini, cursor, kilo and pi ship nothing: gemini's
+/// `--approval-mode` exists but the launch was blocked by trust and auth
+/// dialogs, cursor needs a login, and kilo and pi have no such flag.
+const VERIFIED_PRESETS: &[(&str, &[&str])] = &[
+    (
+        "claude",
+        &[
+            "--permission-mode bypassPermissions",
+            "--permission-mode acceptEdits",
+            "",
+        ],
+    ),
+    ("hermes", &["--yolo", ""]),
+    ("agy", &["--dangerously-skip-permissions", ""]),
+];
+
 #[test]
 fn unverified_clis_ship_no_invented_flag_presets() {
     // A wrong permission flag fails silently and could disable a sandbox, so
@@ -143,19 +163,19 @@ fn unverified_clis_ship_no_invented_flag_presets() {
     let reg = Registry::builtin();
     for entry in reg.iter() {
         assert!(!entry.binary.is_empty(), "{} has no binary", entry.id);
-        if entry.id != "claude" {
-            assert_eq!(
-                entry.flag_presets,
-                vec![String::new()],
-                "{} ships flag presets nobody verified",
+        let got: Vec<&str> = entry.flag_presets.iter().map(String::as_str).collect();
+        match VERIFIED_PRESETS.iter().find(|(id, _)| *id == entry.id) {
+            Some((_, expected)) => assert_eq!(
+                got, *expected,
+                "{} ships presets other than the verified ones",
                 entry.id
-            );
+            ),
+            None => assert_eq!(got, [""], "{} ships flag presets nobody verified", entry.id),
         }
     }
-    let claude = reg.get("claude").unwrap();
-    assert!(claude
-        .flag_presets
-        .contains(&"--permission-mode bypassPermissions".to_string()));
+    for (id, _) in VERIFIED_PRESETS {
+        assert!(reg.get(id).is_some(), "{id} is verified but not registered");
+    }
 }
 
 #[test]

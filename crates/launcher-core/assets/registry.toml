@@ -111,7 +111,7 @@ display_name = "Hermes Agent"
 binary = "hermes"                                   # verified: hermes-agent venv
 kind = "hermes"
 docs_url = "https://github.com/NousResearch/hermes-agent"
-flag_presets = [""]
+flag_presets = ["--yolo", ""]                       # verified 2026-09-03: --help + real launch, herdr 0.8.2, macOS
 briefing_trust = "manual"
 
 [kilo]
@@ -187,7 +187,7 @@ briefing_trust = "manual"
 display_name = "agy"
 binary = "agy"
 kind = "agy"
-flag_presets = [""]
+flag_presets = ["--dangerously-skip-permissions", ""] # verified 2026-09-03: --help + real launch, herdr 0.8.2, macOS
 briefing_trust = "manual"
 
 [omp]
