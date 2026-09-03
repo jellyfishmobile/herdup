@@ -472,6 +472,25 @@ mobile. Removing them was not enough on its own: the bundler sweeps DLLs out of
 
 ---
 
+## Phase 10 — in-app update · M
+
+**Do** — Tauri's updater plugin driven from two Rust commands; a banner and a
+*Check for updates* link; `update_endpoint` setting; signed updater artifacts
+and `latest.json` from CI. Design:
+[`docs/superpowers/specs/2026-09-03-in-app-update-design.md`](../specs/2026-09-03-in-app-update-design.md).
+
+**Tests** — endpoint resolution and translocation detection as pure functions;
+settings round trip. The Tauri layer is verified by QA against a local feed.
+
+**Exit — BUILT 2026-09-03; SEE CHECKBOXES.**
+
+- [ ] macOS end to end against a local feed: banner, install with progress,
+      restart into the new version, tamper refused, silent when the feed 404s.
+- [ ] Windows: unverified — no Windows machine in this effort.
+- [ ] First real signed release published and an installed copy updated from it.
+
+---
+
 ## Manual verification checklist
 
 Automated tests cannot cover these. Run on **both** OSes.
@@ -484,6 +503,7 @@ Automated tests cannot cover these. Run on **both** OSes.
 - [ ] Close a pane, then have the coordinator re-read IDs → it recovers via role labels.
 - [ ] Terminal handoff lands in the right workspace and cwd.
 - [ ] Edit `registry.toml` flags, relaunch → the edit is used and survives.
+- [ ] Update from a published release on each OS: banner, install, restart, new version shown.
 
 ---
 
@@ -496,6 +516,7 @@ Automated tests cannot cover these. Run on **both** OSes.
 | Windows herdr beta is unstable | 0, 6 | Smoke-test Windows **first**, not last. If blocking, ship macOS and gate Windows behind the beta warning. |
 | `agent_status` misreads a CLI | 4 | Degrades to a withheld briefing and a visible button — never a wrong action. |
 | Tauri sidecar/PATH resolution differs from a dev shell | 7 | Resolve `herdr` and `gh` by absolute path at preflight; don't inherit assumptions from the dev environment. |
+| Signing key lost | 10 | No installed copy can ever update again. Key and password live in the owner's password manager; only the public key is in the repo. |
 
 ## Deferred
 

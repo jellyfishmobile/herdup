@@ -18,6 +18,14 @@ into Applications. The app is unsigned and not notarized, so macOS will refuse
 to open a downloaded copy the first time — allow it under System Settings →
 Privacy & Security → "Open Anyway", or build from source below.
 
+**Updating.** herdup checks the release page a few seconds after it opens and
+shows a one-line banner when a newer version exists. *Install and restart*
+downloads it, verifies it against herdup's signing key, replaces the app and
+relaunches. *Check for updates* in the top bar does the same on demand and, if
+it cannot check, says why. On macOS the app must be in Applications — a copy
+opened straight from the disk image cannot replace itself, and the banner says
+so.
+
 You also need:
 
 | | | |
@@ -73,6 +81,11 @@ cargo tauri build              # → target/release/bundle/msi/*.msi (Windows)
                                #   target/release/bundle/dmg/*.dmg (macOS)
 ```
 
+Bundling signs the updater artifacts, so `cargo tauri build` needs the private
+key in `TAURI_SIGNING_PRIVATE_KEY` (and its password in
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Without a key, build the plain app for
+local use with `cargo tauri build --no-bundle`. CI holds the release key.
+
 `cargo build` alone produces a binary that opens on *"localhost refused to
 connect"* — the dev/production decision is made by the Tauri CLI, so always
 build through it.
@@ -96,6 +109,7 @@ before completing a launch, so it starts no agents. See
 | 7 desktop app | done, verified by the selector harness |
 | 8 GitHub new-repo | done — verified live: created, cloned and deleted a throwaway repo |
 | 9 packaging | `.msi` builds and validates; **never installed on a clean machine** |
+| 10 in-app update | built; verified end to end on macOS against a local feed; **first real signed release not yet published** |
 | macOS | built and run on macOS 26, Apple silicon (2026-09-03): 182 tests, the CLI smoke against herdr 0.8.2, the Terminal.app handoff and the packaged app launching are all verified; **the GUI flow itself has not been driven on a Mac** — tauri-driver has no macOS backend |
 
 A full six-agent team has been launched end to end on Windows: 75 s, all six

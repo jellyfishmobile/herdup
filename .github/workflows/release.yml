@@ -1,11 +1,16 @@
 # Build installers for every platform and attach them to a GitHub Release.
 #
-# Windows is the only platform herdup has actually been run on. macOS and Linux
-# artifacts are built here but have not been exercised by a human — the release
-# notes say so, and so does the landing page. Do not quietly drop that caveat.
+# Windows and macOS have been run by a human; Linux artifacts are built here
+# but have not been exercised. The release notes say so. Do not quietly drop
+# that caveat.
+#
+# The build also signs updater artifacts and uploads latest.json, which the
+# app reads to offer in-app updates. That needs the two TAURI_SIGNING_* secrets;
+# without them the build step fails rather than shipping unsigned updates.
 #
 # Triggered by pushing a tag (`git tag v0.1.0 && git push origin v0.1.0`) or by
-# hand from the Actions tab.
+# hand from the Actions tab. The release is created as a draft; publish it by
+# hand after opening the installers once.
 
 name: release
 
@@ -98,6 +103,8 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: app
           args: --target ${{ matrix.target }}
@@ -110,10 +117,12 @@ jobs:
             already installed**, plus at least one agent CLI (Claude Code, Codex,
             Gemini CLI, and others). It launches them; it does not bundle them.
 
-            Nothing here is code-signed, so Windows SmartScreen and macOS Gatekeeper
-            will both warn on first run.
+            Nothing here is code-signed by Apple or Microsoft, so Windows SmartScreen
+            and macOS Gatekeeper will both warn on first run. Once installed, herdup
+            offers later releases from inside the app and verifies them against its
+            own signing key.
 
-            Tested on Windows. The macOS and Linux builds are produced by CI but have
-            not yet been run by a human — please report what breaks.
+            Tested on Windows and macOS (Apple silicon). The Linux build is produced
+            by CI but has not been run by a human — please report what breaks.
           releaseDraft: true
           prerelease: false
