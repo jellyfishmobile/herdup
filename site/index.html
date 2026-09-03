@@ -13,13 +13,13 @@
       property="og:description"
       content="The plumbing for AI coding agents is already here. The layer that links it together is not. herdup is that layer: automate the setup, de-chaos the client work, get things done."
     />
-    <meta property="og:image" content="/img/hero.png" />
+    <meta property="og:image" content="/img/hero-factory.png" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preload" as="image" href="/img/hero.png" />
-    <link rel="stylesheet" href="/styles.css?v=22" />
-    <link rel="stylesheet" href="/stage.css?v=1" />
+    <link rel="preload" as="image" href="/img/hero-factory.png?v=1" />
+    <link rel="stylesheet" href="/styles.css?v=23" />
+    <link rel="stylesheet" href="/stage.css?v=2" />
   </head>
   <body>
     <header class="top">
@@ -39,22 +39,45 @@
          ============================================================ -->
     <section class="hero" id="top">
       <div class="hero-media">
-        <img src="/img/hero.png" alt="" />
-        <video id="hero-video" muted loop playsinline preload="none"></video>
+        <img src="/img/hero-factory.png?v=1" alt="" />
+        <video id="hero-video" muted loop playsinline preload="none"
+               poster="/img/hero-factory.png?v=1" aria-hidden="true"></video>
+
+        <!-- The return leg. The model draws the factory; this draws the one
+             relationship it cannot be trusted with — that the summary goes
+             back to the client, and the whole thing is a loop. -->
+        <svg class="hero-loop" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <marker id="loop-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+                    markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" />
+            </marker>
+          </defs>
+          <path d="M 86 30 C 86 39, 60 39, 40 39 C 22 39, 10 37, 8 30"
+                marker-end="url(#loop-arrow)" />
+        </svg>
+
+        <div class="hero-marks" aria-hidden="true">
+          <span class="hm" style="left:11%;top:44%"><b>Chaos in</b><em>every channel, any shape</em></span>
+          <span class="hm hinge" style="left:44%;top:26%"><b>Sorted</b><em>the PM scopes the work</em></span>
+          <span class="hm" style="left:64%;top:62%"><b>Run in parallel</b><em>several projects at once</em></span>
+          <span class="hm on" style="left:88%;top:44%"><b>You get a summary</b><em>and reply to the client</em></span>
+        </div>
       </div>
+
       <div class="hero-copy">
-        <h1>Put a team of AIs on your code.</h1>
+        <h1>The missing layer for vibe coders.</h1>
         <p class="lede">
-          One agent is a better autocomplete. A team of them is a different kind of thing — but
-          almost nobody finds out, because the setup is brutal. herdup does that setup in about
-          twenty seconds and hands you the reins.
+          The AI coding CLIs are already good. What is missing is the layer above them &mdash;
+          the one that turns whatever your client sends into work a team of agents actually
+          does, and hands you back a summary.
         </p>
         <div class="cta">
           <a class="btn solid" href="#download">Download</a>
-          <a class="btn" href="#story">See how it works</a>
+          <a class="btn" href="#roadmap">See the whole loop</a>
         </div>
         <p class="fineprint">
-          Windows, macOS and Linux · free and open source · needs
+          Windows, macOS and Linux &middot; free and open source &middot; needs
           <a href="https://github.com/herdr-dev/herdr">herdr</a> installed
         </p>
       </div>
@@ -630,10 +653,10 @@
       (function () {
         var v = document.getElementById("hero-video");
         if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        fetch("/img/hero.mp4", { method: "HEAD" })
+        fetch("/img/hero-factory.mp4", { method: "HEAD" })
           .then(function (r) {
             if (!r.ok) return;
-            v.src = "/img/hero.mp4";
+            v.src = "/img/hero-factory.mp4";
             v.addEventListener("canplay", function () {
               v.classList.add("ready");
               if (window.ScrollTrigger) window.ScrollTrigger.refresh();
