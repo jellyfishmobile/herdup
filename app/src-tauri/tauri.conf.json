@@ -27,7 +27,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "nsis", "dmg", "deb", "appimage"],
+    "targets": ["app", "msi", "nsis", "dmg", "deb", "appimage"],
+    "createUpdaterArtifacts": true,
+    "macOS": { "signingIdentity": "-" },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -35,5 +37,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZGOThCOURBMDFFOUE0MTMKUldRVHBPa0Iycm1ZYjdHMWw5aHlscGVhK1lxcFB0V0tNaTJxTnNZb3hzQVdlT2hDZUNBNmZRdWsK",
+      "endpoints": [
+        "https://github.com/jellyfishmobile/herdup/releases/latest/download/latest.json"
+      ],
+      "windows": { "installMode": "passive" }
+    }
   }
 }
