@@ -657,10 +657,10 @@
       (function () {
         var v = document.getElementById("hero-video");
         if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        fetch("/img/hero-factory.mp4", { method: "HEAD" })
+        fetch("/img/hero-factory.mp4?v=2", { method: "HEAD" })
           .then(function (r) {
             if (!r.ok) return;
-            v.src = "/img/hero-factory.mp4";
+            v.src = "/img/hero-factory.mp4?v=2";
             v.addEventListener("canplay", function () {
               v.classList.add("ready");
               if (window.ScrollTrigger) window.ScrollTrigger.refresh();

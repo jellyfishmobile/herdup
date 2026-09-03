@@ -69,14 +69,27 @@ STILL = (
 )
 
 MOTION = (
-    "Continuous fast motion. The input conveyor on the left carries the jumbled "
-    "parcels along briskly. As each parcel reaches its diverter, the sliding "
-    "shoe pushes it sideways off the main line and it slides down a chute into "
-    "one of the four output lanes, one after another in quick succession. In "
-    "the lanes the identical parcels move away steadily, evenly spaced. Nothing "
-    "lifts, nothing flies, nothing is picked up — parcels only slide and are "
-    "pushed. Quick industrial rhythm, everything running at once. Locked-off "
-    "static camera, absolutely no camera movement, no zoom, no pan. " + STYLE
+    "Continuous fast motion, one direction only: left to right. "
+    "THE PILE FEEDS: the chaotic heap of parcels on the far left steadily feeds "
+    "itself onto the input conveyor — parcels peel off the pile one after "
+    "another and stream away down the line, so the mess is visibly being drawn "
+    "in and carried off. "
+    "THE SORTER RUNS: as each parcel reaches its diverter, the sliding shoe "
+    "pushes it sideways off the main line and it slides down a chute into one "
+    "of the output lanes, one after another in quick succession. "
+    "THE LANES STAY NEAT: in every lane the parcels glide away in a straight "
+    "evenly spaced queue, calm and regular, all travelling at the same speed. "
+    # Two failures the first render actually produced, so both are stated as
+    # rules rather than left to the model: parcels wandered off the belts onto
+    # the floor, and the heap sat inert while everything else moved.
+    "EVERY PARCEL STAYS ON A CONVEYOR AT ALL TIMES. No parcel falls off, no "
+    "parcel drifts sideways off a belt, no parcel comes to rest on the floor. "
+    "The white floor to the right of the pile stays completely empty and clean "
+    "for the whole shot — nothing is ever lying on it. "
+    "Nothing lifts, nothing flies, nothing is picked up, nothing tips over — "
+    "parcels only slide along belts and are pushed sideways by shoes. "
+    "Quick industrial rhythm, everything running at once. Locked-off static "
+    "camera, absolutely no camera movement, no zoom, no pan. " + STYLE
 )
 
 def load_env() -> dict:
