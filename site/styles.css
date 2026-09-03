@@ -569,3 +569,12 @@ main section.direction { padding: 28px 24px 32px; }
 @media (prefers-reduced-motion: reduce) {
   .iso-node.busy .face.top { animation: none; }
 }
+
+/* Chaos in, order out — the two halves must look like different substances. */
+.p-chaos { fill: color-mix(in srgb, var(--acc) 40%, var(--faint)); }
+.p-order {
+  fill: var(--acc);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--acc) 55%, transparent));
+}
+/* The inbound arc is drawn faint; the outbound arc is the confident one. */
+.iso-edge { opacity: 0.4; }

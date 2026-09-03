@@ -216,16 +216,31 @@
     svg.appendChild(edges);
     svg.appendChild(nodes);
 
-    // MANY packets, not one. A single token circulating implies the system is
-    // serial and blocking — that one request must finish its lap before the
-    // next moves. It is the opposite: the client keeps writing, the PM keeps
-    // assigning, and the workers run independently. The picture has to say so.
-    const packets = [];
-    for (let i = 0; i < 7; i++) {
-      const c = el("circle", { class: "iso-packet" + (i % 3 === 0 ? " hot" : ""), r: i % 3 === 0 ? 7 : 5, cx: 0, cy: 0 });
-      svg.appendChild(c);
-      packets.push(c);
-    }
+    // Two populations on two arcs, because they are two different things.
+    //
+    //   inbound : client → channel → PM.  What a client actually sends —
+    //             many small things, irregular, overlapping, off the line.
+    //   outbound: PM → team → board → summary → client.  What the PM turned
+    //             that into — uniform, evenly spaced, unhurried.
+    //
+    // The PM is the hinge. That is the whole argument of the product, so it is
+    // the one thing the animation has to get across.
+    const chaosLayer = el("g", { class: "p-layer" });
+    const orderLayer = el("g", { class: "p-layer" });
+    svg.appendChild(chaosLayer);
+    svg.appendChild(orderLayer);
+
+    const via = (...ids) =>
+      ids.map((id) => {
+        const n = byId(id);
+        const p = iso(n.x, n.y, 8);
+        return [p.px, p.py];
+      });
+
+    const paths = {
+      inbound: via("channels", "inbox", "daemon"),
+      outbound: via("daemon", "team", "board", "summary", "channels"),
+    };
 
     host.appendChild(svg);
 
@@ -237,68 +252,137 @@
       `${box.x - pad} ${box.y - pad} ${box.width + pad * 2} ${box.height + pad * 2}`,
     );
 
-    return { svg, packets, loop };
+    return { svg, chaosLayer, orderLayer, paths };
   }
 
-  function animate({ packets, loop }, host) {
-    if (!window.gsap) return;
+  /// Walk a polyline: returns {x, y} at 0..1 along it, plus the local heading.
+  function walker(points) {
+    const segs = [];
+    let total = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      const [x1, y1] = points[i];
+      const [x2, y2] = points[i + 1];
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      segs.push({ x1, y1, x2, y2, len, at: total });
+      total += len;
+    }
+    return (t) => {
+      const d = ((t % 1) + 1) % 1 * total;
+      const s = segs.find((g) => d <= g.at + g.len) ?? segs[segs.length - 1];
+      const k = s.len ? (d - s.at) / s.len : 0;
+      const dx = s.x2 - s.x1;
+      const dy = s.y2 - s.y1;
+      const m = Math.hypot(dx, dy) || 1;
+      return { x: s.x1 + dx * k, y: s.y1 + dy * k, nx: -dy / m, ny: dx / m };
+    };
+  }
+
+  function animate({ svg, chaosLayer, orderLayer, paths }, host) {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    gsap.from(host.querySelectorAll(".iso-node"), {
-      y: 26,
-      opacity: 0,
-      duration: 0.6,
-      stagger: 0.1,
-      ease: "power3.out",
-      immediateRender: false,
-      scrollTrigger: { trigger: host, start: "top 74%", once: true },
-    });
-
-    if (reduced) {
-      packets.forEach((p) => p.setAttribute("opacity", "0"));
-      return;
+    if (window.gsap) {
+      gsap.from(host.querySelectorAll(".iso-node"), {
+        y: 26,
+        opacity: 0,
+        duration: 0.6,
+        stagger: 0.1,
+        ease: "power3.out",
+        immediateRender: false,
+        scrollTrigger: { trigger: host, start: "top 74%", once: true },
+      });
     }
 
-    const pts = loop
-      .getAttribute("points")
-      .trim()
-      .split(/\s+/)
-      .map((p) => p.split(",").map(Number));
-    const seq = pts.concat([pts[0]]);
-
-    // One timeline per packet, each started at a different point and running at
-    // a slightly different speed, so they drift apart instead of marching in
-    // lockstep. No dwell at stations: nothing is waiting its turn.
-    const timelines = packets.map((packet, i) => {
-      const tl = gsap.timeline({ repeat: -1, defaults: { ease: "none" } });
-      seq.forEach(([x, y], n) => {
-        if (n === 0) {
-          gsap.set(packet, { attr: { cx: x, cy: y } });
-          return;
-        }
-        tl.to(packet, { attr: { cx: x, cy: y }, duration: 1.0 });
-      });
-      tl.timeScale(0.8 + (i % 4) * 0.12);
-      tl.progress((i / packets.length + (i % 3) * 0.04) % 1);
-      return tl;
-    });
-
-    // Every station works at its own tempo, so none of them look like they are
-    // idling until a token arrives.
+    // Stations breathe at their own tempo so none look idle between arrivals.
     host.querySelectorAll(".iso-node").forEach((n, i) => {
       n.style.setProperty("--pulse-delay", (i * 0.47).toFixed(2) + "s");
       n.style.setProperty("--pulse-dur", (2.4 + (i % 3) * 0.6).toFixed(2) + "s");
       n.classList.add("busy");
     });
 
+    if (reduced) return;
+
+    const inbound = walker(paths.inbound);
+    const outbound = walker(paths.outbound);
+
+    // The whole point of the picture. Inbound is what a client actually sends:
+    // many small things, irregular, overlapping, arriving whenever. Outbound is
+    // what the PM turned it into: uniform, evenly spaced, calm. Same system.
+    const CHAOS = 22;
+    const ORDER = 7;
+
+    const chaos = [];
+    for (let i = 0; i < CHAOS; i++) {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("class", "p-chaos");
+      chaosLayer.appendChild(c);
+      chaos.push({
+        el: c,
+        t: Math.random(),
+        speed: 0.10 + Math.random() * 0.16, // wildly uneven
+        amp: 5 + Math.random() * 13, // wanders off the line
+        freq: 1.4 + Math.random() * 3.6,
+        phase: Math.random() * 6.28,
+        r: 1.6 + Math.random() * 2.6, // different sizes: different kinds of ask
+      });
+    }
+
+    const order = [];
+    for (let i = 0; i < ORDER; i++) {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("class", "p-order");
+      c.setAttribute("r", "4.6"); // identical, every one of them
+      orderLayer.appendChild(c);
+      order.push({ el: c, t: i / ORDER }); // evenly spaced, always
+    }
+
+    let running = false;
+    let raf = 0;
+    let last = performance.now();
+
+    const frame = (now) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+
+      for (const p of chaos) {
+        p.t = (p.t + p.speed * dt) % 1;
+        const at = inbound(p.t);
+        // Wander decays to nothing as it reaches the PM: order arrives there,
+        // not at the end of the line.
+        const settle = Math.pow(1 - p.t, 1.7);
+        const off = Math.sin(now / 1000 * p.freq + p.phase) * p.amp * settle;
+        p.el.setAttribute("cx", (at.x + at.nx * off).toFixed(1));
+        p.el.setAttribute("cy", (at.y + at.ny * off).toFixed(1));
+        p.el.setAttribute("r", (p.r * (0.6 + settle * 0.8)).toFixed(2));
+        p.el.setAttribute("opacity", (0.30 + settle * 0.55).toFixed(2));
+      }
+
+      // One steady speed, fixed spacing — the calm half of the picture.
+      for (const p of order) {
+        p.t = (p.t + 0.055 * dt) % 1;
+        const at = outbound(p.t);
+        p.el.setAttribute("cx", at.x.toFixed(1));
+        p.el.setAttribute("cy", at.y.toFixed(1));
+      }
+
+      if (running) raf = requestAnimationFrame(frame);
+    };
+
     const io = new IntersectionObserver(
-      (entries) =>
-        entries.forEach((e) => timelines.forEach((tl) => (e.isIntersecting ? tl.play() : tl.pause()))),
+      (entries) => {
+        const vis = entries.some((e) => e.isIntersecting);
+        if (vis && !running) {
+          running = true;
+          last = performance.now();
+          raf = requestAnimationFrame(frame);
+        } else if (!vis && running) {
+          running = false;
+          cancelAnimationFrame(raf);
+        }
+      },
       { threshold: 0 },
     );
     io.observe(host);
   }
-
   function init() {
     const host = document.querySelector("#iso");
     if (!host) return;
