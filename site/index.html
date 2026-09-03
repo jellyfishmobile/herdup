@@ -13,13 +13,16 @@
       property="og:description"
       content="Put a team of AI coding agents on your project, in one terminal, in about twenty seconds."
     />
+    <meta property="og:image" content="/img/hero.png" />
     <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="preload" as="image" href="/img/hero.png" />
+    <link rel="stylesheet" href="/styles.css?v=8" />
   </head>
   <body>
     <header class="top">
-      <span class="mark">herdup</span>
+      <a class="mark" href="#top">herdup</a>
       <nav>
         <a href="#requirements">Requirements</a>
         <a href="#supported">Supported tools</a>
@@ -28,107 +31,173 @@
       </nav>
     </header>
 
-    <main>
-      <section class="hero">
+    <!-- ============================================================
+         Hero. The metaphor lands before a single word of product copy:
+         herdup is named for herding, and that is what it does.
+         ============================================================ -->
+    <section class="hero" id="top">
+      <div class="hero-media">
+        <img src="/img/hero.png" alt="" />
+        <video id="hero-video" muted loop playsinline preload="none"></video>
+      </div>
+      <div class="hero-copy">
         <h1>Put a team of AIs on your code.</h1>
         <p class="lede">
-          herdup is a small desktop app that starts several AI coding agents on one project, side
-          by side in a single terminal. Pick a folder, pick how much help you want, press start.
+          One coding agent is easy. A team of them is a mess of terminals, flags and prompts.
+          herdup does that setup and hands you the reins.
         </p>
         <div class="cta">
           <a class="btn solid" href="#download">Download</a>
-          <a class="btn" href="#how">How it works</a>
+          <a class="btn" href="#story">See how it works</a>
         </div>
         <p class="fineprint">
           Windows, macOS and Linux · free and open source · needs
           <a href="https://github.com/herdr-dev/herdr">herdr</a> installed
         </p>
-      </section>
+      </div>
+      <div class="scroll-cue" aria-hidden>Scroll</div>
+    </section>
 
+    <!-- ============================================================
+         The story. One canvas persists for the whole section: the
+         points scatter, gather, then resolve into the four lanes the
+         app actually builds.
+         ============================================================ -->
+    <section id="story">
+      <canvas id="field" aria-hidden></canvas>
+      <div class="story-scrim" aria-hidden></div>
+
+      <div class="beat">
+        <div class="beat-in">
+          <span class="step">01</span>
+          <h2>Four agents is not four times one.</h2>
+          <p>
+            Four terminals. Four sets of permission flags. The same “do you trust this folder?”
+            question, four times. Then you brief each one by hand and hope you said the same thing
+            twice. Most people give up before finding out whether a team beats a single agent.
+          </p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="beat-in">
+          <span class="step">02</span>
+          <h2>You don’t micromanage a herd. You point it.</h2>
+          <p>
+            Pick a folder. Pick how much help you want. herdup builds the layout, starts each tool,
+            waits until each one is genuinely at its prompt, and hands it its instructions.
+          </p>
+        </div>
+      </div>
+
+      <div class="beat">
+        <div class="beat-in">
+          <span class="step">03</span>
+          <h2>You see the shape before you get it.</h2>
+          <p>
+            One lane per teammate, the lead’s lane marked. Remove anyone by dismissing their lane.
+            Nothing has touched your code yet.
+          </p>
+        </div>
+      </div>
+
+      <!-- Scroll room so the resolved lanes hold on screen before the
+           canvas leaves. Without it the payoff flashes past. -->
+      <div class="beat-hold" aria-hidden></div>
+    </section>
+
+    <!-- ============================================================
+         The product itself. Real screenshots of the built app — never
+         a mockup, never a render.
+         ============================================================ -->
+    <section class="product">
+      <p class="eyebrow rise">The actual app</p>
+      <div class="shots">
+        <figure class="shot">
+          <img src="/img/app-project.png" alt="herdup asking which project to work on" />
+          <figcaption>
+            <strong>Which project.</strong> Recent folders first. If a folder has no version
+            history, or uncommitted changes, it says so here — before anything starts.
+          </figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="/img/app-team.png" alt="herdup showing the workspace with six teammates" />
+          <figcaption>
+            <strong>Who’s on it.</strong> Start from a size, then add or remove anyone. The picture
+            is the workspace you’re about to get.
+          </figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="/img/app-edit.png" alt="herdup after a teammate has been removed" />
+          <figcaption>
+            <strong>Your own line-up.</strong> Dismiss a lane and the team reshapes. The count
+            follows; the preset steps aside.
+          </figcaption>
+        </figure>
+      </div>
+      <p class="shot-note rise">
+        These are screenshots of the built app, taken by its own test harness — not mockups.
+      </p>
+    </section>
+
+    <main>
       <section id="objective">
-        <h2>What it's for</h2>
-        <p>
-          Running one coding agent is easy. Running four — a lead splitting up the work, two
-          writing code, one testing — means juggling terminals, remembering flags, answering the
-          same trust prompt four times, and briefing each one by hand. People give up before they
-          find out whether a team is actually better than a single agent.
+        <h2 class="rise">What it’s for</h2>
+        <p class="rise">
+          herdup is a launcher, not a wrapper. It does the setup — layout, startup, readiness,
+          briefing — and then gets out of the way and gives you the terminal. Once your team is
+          running, herdup is not in the loop and not between you and your tools.
         </p>
-        <p>
-          herdup does that setup. It builds the layout, starts each agent, waits until each is
-          genuinely at its prompt, and hands each one its instructions. Then it gets out of the way
-          and gives you the terminal. It is a launcher, not a wrapper: once your team is running,
-          herdup is not in the loop.
+        <p class="rise">
+          Several projects can run at once. Each launch gets its own workspace, so a team working
+          on one repo keeps going while you start another.
         </p>
-      </section>
-
-      <section id="how">
-        <h2>How it works</h2>
-        <ol class="steps">
-          <li>
-            <strong>Pick a project.</strong> A folder on your machine. If it has no version
-            history, or uncommitted changes, herdup says so before anything starts — these agents
-            edit files, and that should never be a surprise.
-          </li>
-          <li>
-            <strong>Pick a team.</strong> Start from a size — one, two, four or six — then add or
-            remove people. You see the shape of the workspace you're about to get before you get
-            it.
-          </li>
-          <li>
-            <strong>Press start.</strong> herdup creates the layout, starts each tool, waits for
-            each to actually reach its prompt, and briefs it. About twenty seconds.
-          </li>
-          <li>
-            <strong>Take the terminal.</strong> Your team is running in herdr. Start another
-            project alongside it if you want; they run independently.
-          </li>
-        </ol>
       </section>
 
       <section id="requirements">
-        <h2>Requirements</h2>
+        <h2 class="rise">Requirements</h2>
         <div class="cards">
-          <div class="card">
+          <div class="card rise">
             <h3>herdr 0.8.2 or newer</h3>
             <p>
               herdup drives <a href="https://github.com/herdr-dev/herdr">herdr</a>, the terminal
               multiplexer that actually runs the agents. It must be installed and on your PATH.
               herdup checks the version and refuses to launch against anything older, because it
-              relies on herdr's agent API.
+              relies on herdr’s agent API.
             </p>
           </div>
-          <div class="card">
+          <div class="card rise">
             <h3>At least one agent CLI</h3>
             <p>
               herdup starts tools you already have; it does not bundle or resell them. You need at
-              least one of the tools listed below installed and signed in. Their subscriptions and
-              API costs are between you and them.
+              least one of the tools below installed and signed in. Their subscriptions and API
+              costs are between you and them.
             </p>
           </div>
-          <div class="card">
+          <div class="card rise">
             <h3>git, strongly recommended</h3>
             <p>
               Not required, but these agents edit files. Without version history there is no undo,
               and herdup will warn you every time.
             </p>
           </div>
-          <div class="card">
+          <div class="card rise">
             <h3>A terminal</h3>
             <p>
-              Windows Terminal on Windows (PowerShell is used as a fallback), Terminal.app on
-              macOS, or whatever <code>x-terminal-emulator</code> points at on Linux.
+              Windows Terminal on Windows (PowerShell as a fallback), Terminal.app on macOS, or
+              whatever <code>x-terminal-emulator</code> points at on Linux.
             </p>
           </div>
         </div>
       </section>
 
       <section id="supported">
-        <h2>Supported tools</h2>
-        <p class="sub">
-          Any of these can fill any role on a team. herdup knows each one's command, its
-          permission flags, and whether it can be briefed unattended.
+        <h2 class="rise">Supported tools</h2>
+        <p class="sub rise">
+          Any of these can fill any role on a team. herdup knows each one’s command, its permission
+          flags, and whether it can be briefed unattended.
         </p>
-        <ul class="chips">
+        <ul class="chips rise">
           <li>Claude Code</li>
           <li>Codex</li>
           <li>Gemini CLI</li>
@@ -154,56 +223,56 @@
           <li>maki</li>
           <li>muse</li>
         </ul>
-        <p class="sub">
-          The list lives in a plain <code>registry.toml</code> you can edit, so adding a tool
-          herdup has never heard of does not require a new build.
+        <p class="sub rise">
+          The list lives in a plain <code>registry.toml</code> you can edit, so adding a tool herdup
+          has never heard of does not require a new build.
         </p>
 
-        <h3 class="minor">One deliberate limitation</h3>
-        <p>
-          herdup only types instructions into an agent unattended when it can reliably tell that
-          the agent is at its prompt rather than sitting behind a dialog. For tools where that has
-          not been verified, it holds the instructions and asks you to release them after a look.
-          This exists because an early version fired a briefing into a tool that was showing a
-          "trust this folder?" prompt, and the Enter keypress answered the dialog instead.
+        <h3 class="minor rise">One deliberate limitation</h3>
+        <p class="rise">
+          herdup only types instructions into an agent unattended when it can reliably tell the
+          agent is at its prompt rather than sitting behind a dialog. Where that has not been
+          verified, it holds the instructions and asks you to release them after a look. This
+          exists because an early version fired a briefing into a tool showing a “trust this
+          folder?” prompt, and the Enter keypress answered the dialog instead.
         </p>
       </section>
 
       <section id="download">
-        <h2>Download</h2>
-        <p class="sub">
+        <h2 class="rise">Download</h2>
+        <p class="sub rise">
           Installers are built by CI for each release. Nothing is code-signed yet, so Windows
           SmartScreen and macOS Gatekeeper will both warn you on first run.
         </p>
         <div class="dl">
-          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+          <a class="dlcard rise" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">Windows</span>
             <span class="file">.msi installer or .exe setup</span>
             <span class="state ok">tested</span>
           </a>
-          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+          <a class="dlcard rise" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">macOS</span>
             <span class="file">.dmg — Apple silicon and Intel</span>
             <span class="state warn">built, not yet exercised</span>
           </a>
-          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+          <a class="dlcard rise" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">Linux</span>
             <span class="file">.deb and .AppImage</span>
             <span class="state warn">built, not yet exercised</span>
           </a>
         </div>
-        <p class="fineprint">
+        <p class="fineprint rise">
           Honest status: herdup is developed and tested on Windows. The macOS and Linux installers
-          are produced by the same CI from the same commit, but nobody has yet run them on a real
-          desktop. If you try one, please
+          come from the same CI and the same commit, but nobody has yet run them on a real desktop.
+          If you try one, please
           <a href="https://github.com/jellyfishmobile/herdup/issues">say what happened</a>.
         </p>
       </section>
 
       <section id="support">
-        <h2>Support</h2>
+        <h2 class="rise">Support</h2>
         <div class="cards">
-          <div class="card">
+          <div class="card rise">
             <h3>Bugs and questions</h3>
             <p>
               Open an issue on
@@ -212,20 +281,20 @@
               team.
             </p>
           </div>
-          <div class="card">
-            <h3>It isn't finding my tool</h3>
+          <div class="card rise">
+            <h3>It isn’t finding my tool</h3>
             <p>
-              herdup looks for each tool's binary on your PATH and tells you exactly what it looked
+              herdup looks for each tool’s binary on your PATH and tells you exactly what it looked
               for. If yours lives somewhere unusual, edit <code>registry.toml</code> rather than
               waiting for a release.
             </p>
           </div>
-          <div class="card">
+          <div class="card rise">
             <h3>What herdup never does</h3>
             <p>
               It does not send your code anywhere, add a service between you and your tools, or
-              require an account. The only thing that leaves your machine is an optional
-              "create a GitHub repository" action you have to ask for.
+              require an account. The only thing that leaves your machine is an optional “create a
+              GitHub repository” action you have to ask for.
             </p>
           </div>
         </div>
@@ -244,5 +313,30 @@
         <a href="https://github.com/jellyfishmobile/herdup/releases">Releases</a>
       </p>
     </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <script src="/scroll.js?v=8"></script>
+    <script>
+      // The hero video is an upgrade on the still, not a requirement: it only
+      // swaps in once it can actually play, and never for reduced-motion.
+      (function () {
+        var v = document.getElementById("hero-video");
+        if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        fetch("/img/hero.mp4", { method: "HEAD" })
+          .then(function (r) {
+            if (!r.ok) return;
+            v.src = "/img/hero.mp4";
+            v.addEventListener("canplay", function () {
+              v.classList.add("ready");
+              if (window.ScrollTrigger) window.ScrollTrigger.refresh();
+              v.play().catch(function () {});
+            });
+            v.load();
+          })
+          .catch(function () {});
+      })();
+    </script>
   </body>
 </html>

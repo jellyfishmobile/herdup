@@ -36,10 +36,17 @@ const server = createServer(async (req, res) => {
     }
 
     const file = join(ROOT, rel);
+    const ext = extname(file).toLowerCase();
     const body = await readFile(file);
+
+    // HTML, CSS and JS revalidate every time. They are a few KB, and the
+    // alternative is a deploy leaving returning visitors on new markup with an
+    // hour-old stylesheet. Media is immutable in practice and gets a long TTL.
+    const revalidate = ext === ".html" || ext === ".css" || ext === ".js";
+
     res.writeHead(200, {
-      "content-type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream",
-      "cache-control": rel === "index.html" ? "no-cache" : "public, max-age=3600",
+      "content-type": TYPES[ext] ?? "application/octet-stream",
+      "cache-control": revalidate ? "no-cache" : "public, max-age=86400",
       "x-content-type-options": "nosniff",
       "referrer-policy": "strict-origin-when-cross-origin",
     });

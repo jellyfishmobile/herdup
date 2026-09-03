@@ -16,3 +16,8 @@ app/src-tauri/gen/
 .DS_Store
 Thumbs.db
 assets/app/
+
+# secrets — never commit. Contains live Tencent + Resend credentials.
+.env
+.env.*
+!.env.example

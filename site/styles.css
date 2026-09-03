@@ -164,3 +164,120 @@ footer p { max-width: 68ch; }
   * { transition-duration: 1ms !important; }
   .dlcard:hover { transform: none; }
 }
+
+/* ==================================================================
+   Scroll narrative
+   ================================================================== */
+
+/* Deliberately NOT `scroll-behavior: smooth` on html: it desyncs ScrollTrigger,
+   which then reports progress 0 no matter where the page actually is. Anchor
+   links are smoothed in scroll.js instead, where GSAP owns the scroll. */
+
+.top { position: sticky; top: 0; z-index: 40; background: color-mix(in srgb, var(--pa) 88%, transparent); backdrop-filter: blur(10px); }
+
+/* --- hero --------------------------------------------------------- */
+
+.hero {
+  position: relative; min-height: min(92vh, 820px); display: grid; align-items: end;
+  padding: 0; border-bottom: 1px solid var(--rule); overflow: hidden;
+}
+.hero-media { position: absolute; inset: 0; }
+.hero-media img, .hero-media video {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.hero-media video { position: absolute; inset: 0; opacity: 0; transition: opacity 900ms ease-out; }
+.hero-media video.ready { opacity: 1; }
+/* Legibility floor: the headline must never depend on where the sun landed. */
+.hero-media::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(10,12,16,0.30) 0%, rgba(10,12,16,0.10) 32%, rgba(10,12,16,0.82) 100%);
+}
+.hero-copy {
+  position: relative; max-width: 900px; width: 100%; margin: 0 auto;
+  padding: 0 24px 72px; color: #f4f1ec;
+}
+.hero-copy h1 { color: #fff; text-shadow: 0 2px 30px rgba(0,0,0,0.45); max-width: 15ch; }
+.hero-copy .lede { color: rgba(244,241,236,0.86); max-width: 48ch; }
+.hero-copy .fineprint { color: rgba(244,241,236,0.62); }
+.hero-copy .fineprint a { color: #e8a45c; }
+.hero .btn { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.28); color: #fff; backdrop-filter: blur(6px); }
+.hero .btn:hover { border-color: #fff; }
+.hero .btn.solid { background: #fff; border-color: #fff; color: #16171a; }
+.hero .btn.solid:hover { background: #e8a45c; border-color: #e8a45c; color: #1a1205; }
+
+.scroll-cue {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+  font-size: 10.5px; letter-spacing: 0.28em; text-transform: uppercase;
+  color: rgba(244,241,236,0.5);
+}
+
+/* --- the story ---------------------------------------------------- */
+
+#story { position: relative; padding: 0; border-bottom: 1px solid var(--rule); background: var(--pa); }
+#field {
+  position: sticky; top: 0; width: 100%; height: 100vh; display: block;
+  pointer-events: none; z-index: 0;
+}
+.beat {
+  position: relative; z-index: 1; min-height: 78vh; display: grid; align-items: center;
+  max-width: 900px; margin: 0 auto; padding: 0 24px;
+}
+/* Pull the beats back up over the sticky canvas. */
+#story .beat:first-of-type { margin-top: -100vh; }
+.beat-in { max-width: 46ch; }
+.beat .step {
+  display: inline-block; font-size: 11px; letter-spacing: 0.24em; color: var(--acc);
+  margin-bottom: 12px; font-weight: 500;
+}
+.beat h2 { font-size: clamp(26px, 3.6vw, 38px); margin-bottom: 12px; }
+.beat p { color: var(--dim); font-size: 16.5px; }
+
+/* --- real product shots ------------------------------------------- */
+
+.product { max-width: 1120px; margin: 0 auto; padding: 64px 24px; border-bottom: 1px solid var(--rule); }
+.eyebrow {
+  font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--acc); font-weight: 500; margin-bottom: 22px;
+}
+.shots { display: grid; gap: 22px; grid-template-columns: 1fr; }
+@media (min-width: 860px) { .shots { grid-template-columns: repeat(3, 1fr); } }
+.shot { margin: 0; }
+.shot img {
+  width: 100%; height: auto; display: block; border-radius: 10px;
+  border: 1px solid var(--rule); background: #131417;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 18px 40px rgba(0,0,0,0.12);
+}
+.shot figcaption { margin-top: 12px; font-size: 14px; color: var(--dim); text-wrap: pretty; }
+.shot figcaption strong { color: var(--ink); font-weight: 600; }
+.shot-note { margin-top: 26px; font-size: 13.5px; color: var(--faint); }
+
+/* Sections inside <main> keep their own rhythm. */
+main section { padding: 56px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-media video { transition: none; }
+}
+
+/* The herd must never compete with the sentence. On wide screens the field is
+   pushed right (in scroll.js) and this scrim keeps the left column calm. */
+.story-scrim {
+  position: sticky; top: 0; height: 100vh; margin-bottom: -100vh;
+  z-index: 0; pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    var(--pa) 0%,
+    color-mix(in srgb, var(--pa) 92%, transparent) 26%,
+    color-mix(in srgb, var(--pa) 55%, transparent) 46%,
+    transparent 68%
+  );
+}
+@media (max-width: 860px) {
+  /* Narrow: no room for two columns, so calm the whole field instead. */
+  .story-scrim {
+    background: color-mix(in srgb, var(--pa) 72%, transparent);
+  }
+}
+.beat-in { position: relative; z-index: 2; }
+
+/* Scroll room after the last beat so the resolved lanes are held, not flashed. */
+.beat-hold { height: 60vh; position: relative; z-index: 1; }

@@ -1,0 +1,144 @@
+{
+ "TaskType": "AigcVideoTask",
+ "Status": "FINISH",
+ "CreateTime": "2026-09-03T02:28:41Z",
+ "BeginProcessTime": "2026-09-03T02:28:41Z",
+ "FinishTime": "2026-09-03T02:37:54Z",
+ "ProcedureTask": null,
+ "EditMediaTask": null,
+ "WechatPublishTask": null,
+ "ComposeMediaTask": null,
+ "SplitMediaTask": null,
+ "WechatMiniProgramPublishTask": null,
+ "PullUploadTask": null,
+ "TranscodeTask": null,
+ "ConcatTask": null,
+ "ClipTask": null,
+ "CreateImageSpriteTask": null,
+ "SnapshotByTimeOffsetTask": null,
+ "RemoveWatermarkTask": null,
+ "RebuildMediaTask": null,
+ "ExtractTraceWatermarkTask": null,
+ "ExtractCopyRightWatermarkTask": null,
+ "ReviewAudioVideoTask": null,
+ "ReduceMediaBitrateTask": null,
+ "DescribeFileAttributesTask": null,
+ "QualityInspectTask": null,
+ "QualityEnhanceTask": null,
+ "ComplexAdaptiveDynamicStreamingTask": null,
+ "ProcessMediaByMPSTask": null,
+ "AigcImageTask": null,
+ "AigcVideoTask": {
+  "TaskId": "1436636252-AigcVideoTask-d581f08fdbd4b12940fefdf4bce3a2a1t",
+  "Status": "FINISH",
+  "ErrCode": 0,
+  "ErrCodeExt": "",
+  "Message": "",
+  "Progress": 100,
+  "Input": {
+   "ModelName": "Wan",
+   "ModelVersion": "3.0",
+   "FileInfos": [],
+   "SubjectInfos": [],
+   "LastFrameFileId": "",
+   "LastFrameUrl": "",
+   "Prompt": "Slow cinematic drift across an open high plain at golden hour, a distant herd moving unhurried through low dust, long raking sunlight, deep amber and burnt sienna grass, muted slate blue sky above, painterly film grain, very slow camera push, calm and patient, no text, no logos, no people close up",
+   "NegativePrompt": "",
+   "EnhancePrompt": "",
+   "GenerationMode": "",
+   "OutputConfig": {
+    "StorageMode": "Temporary",
+    "MediaName": "",
+    "ClassId": 0,
+    "ExpireTime": "0000-00-00T00:00:00Z",
+    "Duration": 0,
+    "Resolution": "",
+    "AspectRatio": "",
+    "AudioGeneration": "",
+    "PersonGeneration": "",
+    "InputComplianceCheck": "",
+    "OutputComplianceCheck": "",
+    "EnhanceSwitch": "",
+    "OffPeak": "",
+    "FrameInterpolate": "",
+    "LogoAdd": "",
+    "EnableBGM": ""
+   },
+   "InputRegion": "",
+   "SceneType": "",
+   "Seed": null
+  },
+  "Output": {
+   "FileInfos": [
+    {
+     "StorageMode": "Temporary",
+     "MediaName": "",
+     "ClassId": 0,
+     "ExpireTime": "2026-09-10T02:37:59Z",
+     "FileType": "",
+     "FileUrl": "https://store.vod-qcloud.com/9ca6b0e1vodhk251000800/9ab3eca25001834818925535532/aigcVideoGenFile.mp4",
+     "FileContent": "",
+     "FileId": "",
+     "MetaData": {
+      "Size": 8265902,
+      "Container": "mov,mp4,m4a,3gp,3g2,mj2",
+      "Bitrate": 13123083,
+      "Height": 720,
+      "Width": 1280,
+      "Duration": 5.039,
+      "Rotate": 0,
+      "VideoStreamSet": [
+       {
+        "Bitrate": 13083854,
+        "Height": 720,
+        "Width": 1280,
+        "Codec": "h264",
+        "Fps": 30,
+        "CodecTag": "",
+        "DynamicRangeInfo": {
+         "Type": "Unknown",
+         "HDRType": ""
+        }
+       }
+      ],
+      "AudioStreamSet": [
+       {
+        "Bitrate": 127087,
+        "SamplingRate": 44100,
+        "Codec": "aac"
+       }
+      ],
+      "VideoDuration": 5,
+      "AudioDuration": 5.038,
+      "Md5": ""
+     },
+     "UsageType": ""
+    }
+   ],
+   "ProcedureTaskIds": [],
+   "Usage": {
+    "InputTokens": 0,
+    "ThoughtTokens": 0,
+    "InputImageCount": 0,
+    "InputSeconds": 0,
+    "OutputSeconds": 0,
+    "TotalSeconds": 0
+   }
+  },
+  "SessionId": "",
+  "SessionContext": ""
+ },
+ "ImportMediaKnowledge": null,
+ "SceneAigcImageTask": null,
+ "SceneAigcVideoTask": null,
+ "ProcessImageAsyncTask": null,
+ "ExtractBlindWatermarkTask": null,
+ "CreateAigcAdvancedCustomElementTask": null,
+ "CreateAigcCustomVoiceTask": null,
+ "CreateAigcSubjectTask": null,
+ "AigcVideoRedrawTask": null,
+ "AigcAudioTask": null,
+ "CreateAigcAudioCloneTask": null,
+ "DescribeAigcFaceInfoAsyncTask": null,
+ "RequestId": "154e9d72-13f0-4e99-b153-d04728e29b6e"
+}
