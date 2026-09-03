@@ -392,6 +392,30 @@ impl<'a> LaunchRequest<'a> {
 }
 
 /// Build the plan. Pure — same inputs, same output, every time.
+/// The flags a pane actually runs with, and any the swap discarded.
+///
+/// A template's flags are written for the template's CLI. When the user swaps
+/// the CLI, keep them only if the new CLI is known to accept them; otherwise
+/// drop them and say so. Same rule as the registry itself: never use a flag
+/// nobody verified for that CLI.
+fn resolve_flags<'a>(
+    spec: &'a PaneSpec,
+    cli_id: &str,
+    entry: &crate::registry::CliEntry,
+) -> (&'a str, Option<String>) {
+    let swapped = cli_id != spec.cli;
+    let wanted = spec.flags.trim();
+    let accepted = entry
+        .flag_presets
+        .iter()
+        .any(|preset| preset.trim() == wanted);
+    if swapped && !wanted.is_empty() && !accepted {
+        ("", Some(wanted.to_string()))
+    } else {
+        (wanted, None)
+    }
+}
+
 pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPlan> {
     let template = request.template;
 
@@ -427,21 +451,7 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
             cli: cli_id.clone(),
         })?;
 
-        // A template's flags are written for the template's CLI. When the user
-        // swaps the CLI, keep them only if the new CLI is known to accept them;
-        // otherwise drop them and say so. Same rule as the registry itself:
-        // never use a flag nobody verified for that CLI.
-        let swapped = cli_id != k.spec.cli;
-        let flags_wanted = k.spec.flags.trim();
-        let accepted = entry
-            .flag_presets
-            .iter()
-            .any(|preset| preset.trim() == flags_wanted);
-        let (flags, dropped_flags) = if swapped && !flags_wanted.is_empty() && !accepted {
-            ("", Some(flags_wanted.to_string()))
-        } else {
-            (flags_wanted, None)
-        };
+        let (flags, dropped_flags) = resolve_flags(k.spec, &cli_id, entry);
 
         // Without a herdr agent kind there is no readiness signal and no
         // `agent_blocked` guard, so such a pane can never be auto-briefed
@@ -561,6 +571,60 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
         workspace_label: label,
         panes,
         steps,
+    })
+}
+
+/// The team this request actually launches, as a [`Template`].
+///
+/// The same `compact()` and the same per-pane CLI and flag resolution as
+/// [`plan`], so what comes back is what ran: dropped panes are absent, a
+/// swapped CLI is the one that started, added roles are included, and splits
+/// are remapped onto the compacted indices. Written back out this is a
+/// `.herdr/team.toml` the loader reads.
+pub fn resolve_team(
+    request: &LaunchRequest<'_>,
+    registry: &Registry,
+) -> Result<crate::template::Template> {
+    let template = request.template;
+    if let Some(&bad) = request.skip.iter().find(|&&i| i >= template.panes.len()) {
+        return Err(PlanError::SkipOutOfRange {
+            index: bad,
+            count: template.panes.len(),
+        });
+    }
+    let kept = compact(template, &request.extra, &request.skip)?;
+    let mut panes = Vec::with_capacity(kept.len());
+    for k in &kept {
+        let cli_id = k
+            .original_index
+            .and_then(|i| request.cli_overrides.get(&i).cloned())
+            .unwrap_or_else(|| k.spec.cli.clone());
+        let entry = registry.get(&cli_id).ok_or_else(|| PlanError::UnknownCli {
+            role: k.spec.role.clone(),
+            cli: cli_id.clone(),
+        })?;
+        let (flags, _dropped) = resolve_flags(k.spec, &cli_id, entry);
+        panes.push(PaneSpec {
+            role: k.spec.role.clone(),
+            cli: cli_id,
+            flags: flags.to_string(),
+            briefing: k.spec.briefing.clone(),
+            coordinator: k.spec.coordinator,
+            split: k.split.as_ref().map(|s| crate::template::Split {
+                direction: s.direction,
+                ratio: s.ratio,
+                from: s.from,
+            }),
+        });
+    }
+    Ok(crate::template::Template {
+        id: crate::template::REPO_TEMPLATE_ID.to_string(),
+        display_name: request
+            .workspace_label
+            .clone()
+            .unwrap_or_else(|| template.display_name.clone()),
+        description: template.description.clone(),
+        panes,
     })
 }
 
