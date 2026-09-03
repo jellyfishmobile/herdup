@@ -70,13 +70,12 @@ PROMPTS = {
     # Art direction only. The pipeline diagram itself is built in code, because
     # generated imagery cannot carry accurate labels or a correct flow — it
     # would look like an explanation without being one.
+    # Matches the reference illustrations: flat isometric vector, real conveyor,
+    # parcels, machines and little workers. Art direction comes from here; the
+    # accurate labels stay in HTML on top, because models cannot be trusted with
+    # six correct captions.
     "factory": (
-        "Isometric 3D render of a clean automated assembly line, conveyor belts carrying "
-        "small glowing amber blocks between four distinct workstations, dark slate and "
-        "graphite machinery, warm amber accent lighting, matte surfaces, soft studio "
-        "lighting, shallow depth of field, generous empty floor space around the line, "
-        "minimal, product-render quality, no text, no logos, no people "
-        "--ar 16:9 --style raw --q 2 --s 200"
+        "flat isometric vector illustration, clean corporate infographic style, automated factory assembly line, long conveyor belt winding through the scene carrying cardboard parcels, robotic arms, control machines with screens, small stylised worker figures in overalls standing at stations, pure white background, soft long shadows, amber orange and slate blue and teal palette, crisp flat colours, no gradients, no text, no logos, no watermark --ar 16:9 --q 2 --s 180"
     ),
     "texture": (
         "Extreme close up of weathered saddle leather, warm amber brown, soft raking "
@@ -92,11 +91,11 @@ PROMPTS = {
 # headline, so motion must never compete with the text.
 VIDEO_PROMPTS = {
     "factory": (
-        "Slow steady isometric shot of a clean automated assembly line, conveyor belts "
-        "carrying small glowing amber blocks left to right between workstations, robotic "
-        "arms moving in a calm repeating rhythm, dark slate machinery, warm amber accent "
-        "light, matte surfaces, soft studio lighting, very slow camera drift, no text, "
-        "no logos, no people"
+        "flat isometric vector illustration, clean corporate infographic style, automated factory assembly line, long conveyor belt winding through the scene carrying cardboard parcels, robotic arms, control machines with screens, small stylised worker figures in overalls standing at stations, pure white background, soft long shadows, amber orange and slate blue and teal palette, crisp flat colours, no gradients, no text, no logos, no watermark. "
+        "The conveyor belt runs continuously carrying parcels along it, robotic arms "
+        "pick and place boxes in a calm repeating rhythm, machine indicator lights blink, "
+        "workers make small idle movements. Locked-off static camera, no camera movement, "
+        "seamless loop, smooth steady motion"
     ),
     "hero": (
         "Slow cinematic drift across an open high plain at golden hour, a distant "

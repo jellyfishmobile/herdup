@@ -1,0 +1,122 @@
+/* The layered factory: generated motion underneath, accurate labels on top.
+ *
+ * The scene is light and busy, so every label carries a white outline AND a
+ * shadow. Text over generated imagery has no contrast guarantee — the artwork
+ * can change under it — so legibility has to come from the label itself.
+ */
+
+.iso-fig {
+  position: relative;
+  margin: 30px 0 26px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.iso-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #f3efe7;
+}
+.iso-plate,
+.iso-motion {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* The video fades in over its own poster once it can play, so there is never a
+   blank frame and the still is a real fallback rather than a placeholder. */
+.iso-motion {
+  opacity: 0;
+  transition: opacity 700ms ease-out;
+}
+.iso-motion.ready {
+  opacity: 1;
+}
+
+/* --- the labels --------------------------------------------------------- */
+
+.iso-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.mk {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  text-align: center;
+  white-space: nowrap;
+  /* Outline plus shadow: the artwork underneath is not under our control. */
+  paint-order: stroke;
+  -webkit-text-stroke: 3px rgba(255, 255, 255, 0.92);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9),
+    0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.mk b {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #16171a;
+}
+.mk em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: #3d4148;
+}
+.mk i {
+  display: block;
+  width: 11px;
+  height: 11px;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  background: #16171a;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  -webkit-text-stroke: 0;
+}
+/* The hinge and the one shipping station are the two things worth spotting. */
+.mk.hinge i { background: #b8681e; }
+.mk.hinge b { color: #7d430c; }
+.mk.on i { background: #1c6b45; }
+.mk.on b { color: #145c3b; }
+
+.iso-fig figcaption {
+  margin: 0;
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--rule);
+  font-size: 12.5px;
+  color: var(--dim);
+  text-wrap: pretty;
+}
+.iso-fig figcaption strong { color: var(--ink); }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Narrow screens cannot carry six overlaid labels legibly, so drop to the
+   picture plus the caption — the linear diagram below still names the stages. */
+@media (max-width: 700px) {
+  .iso-marks { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iso-motion { display: none; }
+}

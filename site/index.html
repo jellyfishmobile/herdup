@@ -18,7 +18,8 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" as="image" href="/img/hero.png" />
-    <link rel="stylesheet" href="/styles.css?v=19" />
+    <link rel="stylesheet" href="/styles.css?v=21" />
+    <link rel="stylesheet" href="/stage.css?v=1" />
   </head>
   <body>
     <header class="top">
@@ -279,17 +280,38 @@
           a studio.
         </p>
 
-        <!-- The whole solution as one isometric diagram, drawn from a real
-             projection in isometric.js. It has to show the LOOP: the summary
-             returns to the client, who replies. A straight pipeline cannot say
-             that, and the loop is the product. -->
+        <!-- The generated factory runs underneath; the labels ride on top.
+             AIGC supplies the look, HTML supplies the six captions -- models
+             cannot be trusted with readable text and these have to be right.
+             The poster is the still from the same prompt, so the fallback
+             matches the motion. -->
         <figure id="iso-fig" class="iso-fig rise">
-          <div class="factory-plate" aria-hidden></div>
-          <div id="iso"></div>
+          <div class="iso-stage">
+            <img class="iso-plate" src="/img/factory.png?v=2" alt="" />
+            <video class="iso-motion" muted loop playsinline preload="none"
+                   poster="/img/factory.png?v=2" aria-hidden="true"></video>
+
+            <div class="iso-marks" aria-hidden="true">
+              <span class="mk" style="left:9%;top:58%"><i></i><b>Your client</b><em>WhatsApp &middot; Telegram &middot; email</em></span>
+              <span class="mk" style="left:26%;top:40%"><i></i><b>Client channel</b><em>one inbox, no AI</em></span>
+              <span class="mk hinge" style="left:46%;top:22%"><i></i><b>herdupd + PM</b><em>chat becomes scoped work</em></span>
+              <span class="mk on" style="left:68%;top:38%"><i></i><b>The team</b><em>coders &middot; QA &middot; shipping today</em></span>
+              <span class="mk" style="left:84%;top:58%"><i></i><b>Board &amp; thread</b><em>kanban &middot; agent traffic</em></span>
+              <span class="mk" style="left:60%;top:80%"><i></i><b>Executive summary</b><em>status &middot; KPIs &middot; back to you</em></span>
+            </div>
+          </div>
+
+          <p class="sr-only">
+            The loop: your client sends requests from a chat app; the client channel takes them in;
+            herdupd and the PM turn them into scoped work; the team of coders and QA execute; the
+            board and thread record it; the executive summary returns to your client.
+          </p>
+
           <figcaption>
-            Watch the two halves. What the client sends is messy and arrives whenever — many small things, none of them scoped. The PM is the hinge: what leaves it is uniform, evenly spaced and actionable, and the feedback that reaches you is calm. Nothing waits its turn. Only <strong>the team</strong> exists today — the
-            launcher builds it in about twenty seconds. Everything else on this loop is designed,
-            not written.
+            Messy in, uniform out. What a client sends arrives whenever and in any shape &mdash; the
+            PM is the hinge that turns it into work the team can actually execute, and what comes
+            back to you is a summary. Only <strong>the team</strong> exists today; the launcher
+            builds it in about twenty seconds.
           </figcaption>
         </figure>
 
@@ -583,9 +605,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-    <script src="/scroll.js?v=19"></script>
+    <script src="/scroll.js?v=21"></script>
     <script src="/pipeline.js?v=1"></script>
-    <script src="/isometric.js?v=6"></script>
     <script>
       // The hero video is an upgrade on the still, not a requirement: it only
       // swaps in once it can actually play, and never for reduced-motion.
@@ -604,6 +625,36 @@
             v.load();
           })
           .catch(function () {});
+      })();
+    </script>
+
+    <script>
+      // The factory animation is an upgrade on its own poster, never a
+      // requirement: it only swaps in once it can actually play, and never for
+      // reduced-motion. Same contract as the hero video.
+      (function () {
+        var v = document.querySelector(".iso-motion");
+        if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        var start = function () {
+          v.src = "/img/factory.mp4";
+          v.addEventListener("canplay", function () {
+            v.classList.add("ready");
+            v.play().catch(function () {});
+          });
+          v.load();
+        };
+        // Only fetch 8MB once the diagram is actually approaching the viewport.
+        if ("IntersectionObserver" in window) {
+          var io = new IntersectionObserver(function (es) {
+            if (es.some(function (e) { return e.isIntersecting; })) {
+              io.disconnect();
+              start();
+            }
+          }, { rootMargin: "600px" });
+          io.observe(v);
+        } else {
+          start();
+        }
       })();
     </script>
   </body>
