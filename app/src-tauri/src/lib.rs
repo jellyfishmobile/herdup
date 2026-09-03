@@ -210,7 +210,7 @@ pub struct AddableRoleDto {
     cli: String,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Clone)]
 pub struct LaunchOptions {
     project: String,
     template: String,
@@ -238,6 +238,9 @@ pub struct AppState {
     first_run: Mutex<Option<FirstRunSession>>,
     /// The update found by the last check, so Install can act on it.
     update: Mutex<Option<tauri_plugin_updater::Update>>,
+    /// The options the last launch ran with, so the team can be saved back to
+    /// the project exactly as it started.
+    last_launch: Mutex<Option<LaunchOptions>>,
 }
 
 fn client() -> Result<HerdrCli, String> {
@@ -276,18 +279,20 @@ fn build_launch_plan(options: &LaunchOptions) -> Result<(LaunchPlan, Registry, S
     build_plan_inner(options, taken)
 }
 
-fn build_plan_inner(
+/// The template `options` names, resolved against its own project.
+///
+/// `repo` is the project's own team file, so its absence and its load error are
+/// the message rather than "no template 'repo'".
+fn resolve_launch_template<'a>(
     options: &LaunchOptions,
-    reserved: Vec<String>,
-) -> Result<(LaunchPlan, Registry, Settings), String> {
-    let (registry, _, settings) = load()?;
-    let project = PathBuf::from(&options.project);
-    let (templates, repo_error) = launcher_core::config::load_templates_for(&project, &registry)
-        .map_err(|e| e.to_string())?;
-    let template = match templates.get(&options.template) {
-        Some(t) => t,
+    project: &std::path::Path,
+    templates: &'a launcher_core::template::Templates,
+    repo_error: Option<launcher_core::ConfigError>,
+) -> Result<&'a launcher_core::template::Template, String> {
+    match templates.get(&options.template) {
+        Some(t) => Ok(t),
         None if options.template == launcher_core::template::REPO_TEMPLATE_ID => {
-            return Err(match repo_error {
+            Err(match repo_error {
                 Some(e) => e.to_string(),
                 None => format!(
                     "no {} in {}",
@@ -296,9 +301,25 @@ fn build_plan_inner(
                 ),
             })
         }
-        None => return Err(format!("no template '{}'", options.template)),
-    };
-    let mut request = LaunchRequest::new(&project, template).reserving(reserved);
+        None => Err(format!("no template '{}'", options.template)),
+    }
+}
+
+/// The request a set of launch options describes: the panes dropped, the tools
+/// swapped and the roles added, in that order.
+///
+/// Shared by planning and by saving the team back to the project, so both build
+/// the same team from the same options. `reserved` is the agent names the herdr
+/// session already owns: only a real launch has any, and a preview or a save
+/// passes none.
+fn request_from_options<'a>(
+    options: &LaunchOptions,
+    project: &'a std::path::Path,
+    template: &'a launcher_core::template::Template,
+    registry: &Registry,
+    reserved: Vec<String>,
+) -> Result<LaunchRequest<'a>, String> {
+    let mut request = LaunchRequest::new(project, template).reserving(reserved);
     for index in &options.skip {
         request = request.skip_pane(*index);
     }
@@ -331,6 +352,19 @@ fn build_plan_inner(
         }
         request = request.add_pane(spec);
     }
+    Ok(request)
+}
+
+fn build_plan_inner(
+    options: &LaunchOptions,
+    reserved: Vec<String>,
+) -> Result<(LaunchPlan, Registry, Settings), String> {
+    let (registry, _, settings) = load()?;
+    let project = PathBuf::from(&options.project);
+    let (templates, repo_error) = launcher_core::config::load_templates_for(&project, &registry)
+        .map_err(|e| e.to_string())?;
+    let template = resolve_launch_template(options, &project, &templates, repo_error)?;
+    let request = request_from_options(options, &project, template, &registry, reserved)?;
     let plan = launcher_core::plan::plan(&request, &registry).map_err(|e| e.to_string())?;
     Ok((plan, registry, settings))
 }
@@ -740,6 +774,7 @@ async fn launch(app: tauri::AppHandle, options: LaunchOptions) -> Result<Outcome
         let dto = outcome_dto(&outcome);
         if let Some(state) = app.try_state::<AppState>() {
             *state.outcome.lock().unwrap() = Some(outcome);
+            *state.last_launch.lock().unwrap() = Some(options.clone());
         }
         Ok(dto)
     })
@@ -872,6 +907,58 @@ fn send_briefing_now_blocking(
         .send_pending_briefing(pane)
         .map_err(|e| e.to_string())?;
     Ok(outcome_dto(outcome))
+}
+
+#[derive(Serialize)]
+pub struct SaveTeamDto {
+    /// False when the file exists and the caller did not ask to replace it.
+    written: bool,
+    path: String,
+}
+
+/// Write the team that last launched into the project's `.herdr/team.toml`.
+///
+/// Re-resolves from the launch's own options, so what lands is what ran:
+/// dropped panes absent, swapped tools as they started, added roles included.
+/// Without `overwrite` an existing file is reported and left untouched.
+#[tauri::command]
+async fn save_team_file(
+    state: State<'_, AppState>,
+    overwrite: bool,
+) -> Result<SaveTeamDto, String> {
+    let options = state
+        .last_launch
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or("launch a team first")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let registry = launcher_core::config::load_registry().map_err(|e| e.to_string())?;
+        let project = PathBuf::from(&options.project);
+        let (templates, repo_error) =
+            launcher_core::config::load_templates_for(&project, &registry)
+                .map_err(|e| e.to_string())?;
+        let template = resolve_launch_template(&options, &project, &templates, repo_error)?;
+        // Nothing is reserved: this re-resolves the shape that ran, it starts
+        // nothing, so no agent name is being claimed.
+        let request = request_from_options(&options, &project, template, &registry, Vec::new())?;
+        let team =
+            launcher_core::plan::resolve_team(&request, &registry).map_err(|e| e.to_string())?;
+        match launcher_core::template::save_repo_team(&project, &team, overwrite)
+            .map_err(|e| format!("could not write the team file: {e}"))?
+        {
+            launcher_core::template::SaveOutcome::Written(path) => Ok(SaveTeamDto {
+                written: true,
+                path: path.display().to_string(),
+            }),
+            launcher_core::template::SaveOutcome::Exists(path) => Ok(SaveTeamDto {
+                written: false,
+                path: path.display().to_string(),
+            }),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Serialize, Clone)]
@@ -1157,6 +1244,7 @@ pub fn run() {
             finish_first_run,
             launch,
             send_briefing_now,
+            save_team_file,
             gh_owners,
             create_repo,
             attach_workspace,
