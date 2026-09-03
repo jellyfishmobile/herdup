@@ -367,3 +367,34 @@ main section.direction { padding: 28px 24px 32px; }
 }
 
 .direction > .fineprint { margin: 0; }
+
+/* --- roadmap: the client workflow -------------------------------- */
+
+.flow { display: grid; gap: 18px; grid-template-columns: 1fr; margin: 28px 0; }
+@media (min-width: 760px) { .flow { grid-template-columns: 1fr 1fr; } }
+.flow > div { position: relative; padding-left: 44px; }
+.flow .n {
+  position: absolute; left: 0; top: 1px;
+  width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 13px; font-weight: 700; color: var(--acc);
+  background: var(--acc-soft); border: 1px solid var(--acc-line);
+}
+.flow h3 { margin: 0 0 5px; font-size: 16px; }
+.flow p { margin: 0; color: var(--dim); font-size: 14.5px; }
+
+.phases { list-style: none; margin: 18px 0 22px; padding: 0; display: grid; gap: 10px; }
+.phases li {
+  display: flex; gap: 14px; align-items: flex-start;
+  border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--card); padding: 14px 16px;
+}
+.phases div { color: var(--dim); font-size: 14.5px; }
+.phases strong { color: var(--ink); font-weight: 600; }
+.ph {
+  flex: none; min-width: 68px; text-align: center;
+  font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600;
+  padding: 4px 10px; border-radius: 999px; margin-top: 2px;
+  border: 1px solid var(--rule); color: var(--faint);
+}
+/* Only one of these is real software, and it should read that way. */
+.ph.shipped { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }

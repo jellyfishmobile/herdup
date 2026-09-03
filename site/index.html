@@ -18,14 +18,14 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" as="image" href="/img/hero.png" />
-    <link rel="stylesheet" href="/styles.css?v=10" />
+    <link rel="stylesheet" href="/styles.css?v=12" />
   </head>
   <body>
     <header class="top">
       <a class="mark" href="#top">herdup</a>
       <nav>
         <a href="#argument">The argument</a>
-        <a href="#direction">Where it’s going</a>
+        <a href="#roadmap">Roadmap</a>
         <a href="#supported">Supported tools</a>
         <a href="#download">Download</a>
         <a href="https://github.com/jellyfishmobile/herdup">GitHub</a>
@@ -156,7 +156,7 @@
       <p class="rise caveat">
         This is an opinion, not a result. It is unproven, and it may be wrong. What exists today is
         the first honest piece of it — the setup cost, removed, and nothing else. The rest of the
-        argument is <a href="#direction">written down further below and not built</a>.
+        argument is <a href="#roadmap">on the roadmap below</a>.
       </p>
     </section>
 
@@ -217,42 +217,101 @@
       </section>
 
       <!-- ============================================================
-           NOT BUILT. This section is visually and verbally separated
-           from everything above it on purpose. Nothing described here
-           exists; if that ever stops being true, the treatment has to
-           change with it.
+           ROADMAP. Direction, not capability. The label stays, the
+           tone can be confident — but nothing here may imply you can
+           use it today, and no screenshots of unbuilt UI, ever.
            ============================================================ -->
-      <section id="direction" class="direction">
+      <section id="roadmap" class="direction">
         <div class="notice rise">
-          <span class="tag">Not built yet</span>
+          <span class="tag">Roadmap</span>
           <p>
-            Nothing in this section exists. No code has been written for it, there is no release it
-            is coming in, and there is nothing here you can download or try. It is a design settled
-            on paper, written down because the argument above is incomplete without it. If you are
-            deciding whether herdup is useful to you, decide on everything <em>above</em> this line.
+            Where herdup is going. Designed and specified, not yet shipped — everything
+            <em>above</em> this line is working software you can download today.
           </p>
         </div>
 
-        <h2 class="rise">Where this is going</h2>
-        <p class="sub rise">The intended shape, in the author’s own words:</p>
+        <h2 class="rise big">Hand your client the keyboard.</h2>
+        <p class="lede rise">
+          Right now you are the translation layer. Your client messages you — “the login feels
+          slow, and can that button be blue” — and you turn it into branches, commits and a reply.
+          Both directions run through you, which means nothing moves while you sleep.
+        </p>
 
-        <blockquote class="rise">
-          <p>
-            herdr is a tmux-like client where you can run multiple terminal instances, but it gives
-            full signal control to the CLI app, which makes inter-terminal communication possible.
-            Run Claude in three panes and all three can talk.
-          </p>
-          <p>
-            herdup builds that workflow — and adds a special “channel” called <strong>client</strong>,
-            which you connect to WhatsApp, Telegram, Slack, email, Google Docs, Discord. It takes
-            everything sent to it and gives it to the PM, which turns whatever arrives into
-            something understandable, executable and actionable for the agents. They all run
-            autonomously, and what comes back to the client is an executive summary: project status,
-            the kanban board, and the conversation between the PM and the agents, like Slack.
-          </p>
-        </blockquote>
+        <div class="flow rise">
+          <div>
+            <span class="n">1</span>
+            <h3>Your client stays where they already are</h3>
+            <p>
+              WhatsApp, Telegram, Slack, Discord, email, a shared doc. No app to install, no
+              account to make, no portal to log into. You can sit in the same thread with them.
+            </p>
+          </div>
+          <div>
+            <span class="n">2</span>
+            <h3>The PM turns chat into work</h3>
+            <p>
+              Half-formed asks, voice-note transcripts and “actually, make it blue” become scoped,
+              executable tasks — with the detail an agent needs and the client never supplied.
+            </p>
+          </div>
+          <div>
+            <span class="n">3</span>
+            <h3>The team executes, hands-off</h3>
+            <p>
+              Coders write, QA verifies, the board moves. You are not in the loop by default, and
+              nothing waits on you to relay a message.
+            </p>
+          </div>
+          <div>
+            <span class="n">4</span>
+            <h3>You watch, in herdup</h3>
+            <p>
+              Progress and status, the conversation between the PM and the agents, the documents
+              that got shared, and the numbers that tell you whether it is actually going well.
+            </p>
+          </div>
+        </div>
 
-        <h3 class="minor rise">Design decisions already settled — still not built</h3>
+        <p class="rise">
+          The point is not that you disappear. It is that you stop being the bottleneck in both
+          directions — so taking on a second project, or a third, stops meaning twice or three
+          times the relaying. That is what “thriving” looks like for one person doing the work of
+          a studio.
+        </p>
+
+        <h3 class="minor rise">In order</h3>
+        <ol class="phases rise">
+          <li>
+            <span class="ph shipped">Shipping</span>
+            <div>
+              <strong>The launcher.</strong> Pick a project, pick a team, twenty seconds to a
+              running workspace. This is the part you can download today.
+            </div>
+          </li>
+          <li>
+            <span class="ph">Next</span>
+            <div>
+              <strong>The client channel.</strong> One inbox, the PM translating into tasks, a
+              kanban board and an executive summary — all local, nothing leaving your machine.
+            </div>
+          </li>
+          <li>
+            <span class="ph">Then</span>
+            <div>
+              <strong>The platforms.</strong> WhatsApp, Telegram, Slack, Discord, email and shared
+              docs feeding that same inbox, so the client never learns a new tool.
+            </div>
+          </li>
+          <li>
+            <span class="ph">Then</span>
+            <div>
+              <strong>Oversight.</strong> Shared documents, the full interaction history, and KPIs
+              — so “how is it going” has an answer you did not have to assemble by hand.
+            </div>
+          </li>
+        </ol>
+
+        <h3 class="minor rise">Decisions already settled</h3>
         <div class="plan">
           <article class="planned rise">
             <span class="pin">Planned</span>
@@ -283,18 +342,18 @@
           </article>
           <article class="planned rise">
             <span class="pin">Planned</span>
-            <h3>No screenshots here, on purpose</h3>
+            <h3>No mockups on this page</h3>
             <p>
-              There is no interface to photograph, so there is nothing to show. Every image on this
-              page is a capture of software that runs today. None will be added for this section
-              until it is real.
+              Every image here is a capture of software that runs today. When the client channel
+              exists, its screenshots will be real captures too — placeholders never ship on this
+              page.
             </p>
           </article>
         </div>
 
         <p class="fineprint rise">
-          No schedule, no promise, no waiting list. It is written down so the page argues honestly
-          rather than hinting. Everything above this section is the part that exists.
+          No dates and no waiting list — this is the direction, published so the argument above is
+          complete. Follow along on <a href="https://github.com/jellyfishmobile/herdup">GitHub</a>.
         </p>
       </section>
 
@@ -461,7 +520,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-    <script src="/scroll.js?v=10"></script>
+    <script src="/scroll.js?v=12"></script>
     <script>
       // The hero video is an upgrade on the still, not a requirement: it only
       // swaps in once it can actually play, and never for reduced-motion.

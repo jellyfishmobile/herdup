@@ -190,36 +190,32 @@ function init() {
     });
   }
 
-  // Each beat's text fades up as it arrives and holds while pinned.
+  // Reveal helper.
+  //
+  // `gsap.from` + immediateRender:false is deliberate and load-bearing: it means
+  // an element is NOT hidden until its tween actually starts. The obvious
+  // `fromTo({opacity:0})` hides everything on load and only reveals what a
+  // ScrollTrigger later fires — so an anchor jump, a resize, stale geometry or a
+  // slow CDN leaves content permanently blank. Content must be visible by
+  // default and animation must be the enhancement, never the gate.
+  //
+  // `once:true` for the same reason: nothing re-hides on the way back up.
+  const reveal = (el, vars, trigger) =>
+    gsap.from(el, {
+      ...vars,
+      ease: "power3.out",
+      immediateRender: false,
+      scrollTrigger: { trigger: trigger ?? el, start: "top 88%", once: true },
+    });
+
   gsap.utils.toArray(".beat").forEach((beat) => {
-    gsap.fromTo(
-      beat.querySelector(".beat-in"),
-      { y: 26, opacity: 0 },
-      {
-        y: 0,
-        opacity: 1,
-        ease: "power3.out",
-        duration: 0.8,
-        scrollTrigger: { trigger: beat, start: "top 72%", toggleActions: "play none none reverse" },
-      },
-    );
+    reveal(beat.querySelector(".beat-in"), { y: 26, opacity: 0, duration: 0.8 }, beat);
   });
 
   // The product shots arrive with a small lift — enough to feel deliberate,
   // not so much that it reads as a carousel.
   gsap.utils.toArray(".shot").forEach((shot) => {
-    gsap.fromTo(
-      shot,
-      { y: 40, opacity: 0, scale: 0.97 },
-      {
-        y: 0,
-        opacity: 1,
-        scale: 1,
-        ease: "power3.out",
-        duration: 0.9,
-        scrollTrigger: { trigger: shot, start: "top 80%", toggleActions: "play none none reverse" },
-      },
-    );
+    reveal(shot, { y: 40, opacity: 0, scale: 0.97, duration: 0.9 });
   });
 
   // ScrollTrigger measures the page when it is created, which is before the
@@ -232,18 +228,7 @@ function init() {
   });
 
   gsap.utils.toArray(".rise").forEach((el, i) => {
-    gsap.fromTo(
-      el,
-      { y: 18, opacity: 0 },
-      {
-        y: 0,
-        opacity: 1,
-        ease: "power3.out",
-        duration: 0.7,
-        delay: (i % 4) * 0.05,
-        scrollTrigger: { trigger: el, start: "top 88%", toggleActions: "play none none reverse" },
-      },
-    );
+    reveal(el, { y: 18, opacity: 0, duration: 0.7, delay: (i % 4) * 0.05 });
   });
 }
 
