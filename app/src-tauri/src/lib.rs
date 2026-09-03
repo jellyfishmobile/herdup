@@ -286,12 +286,30 @@ fn build_plan_inner(
         request = request.override_cli(*index, cli);
     }
     let addable = launcher_core::template::addable_roles();
-    for id in &options.extra {
+    for entry in &options.extra {
+        // "coder" uses the role's default tool; "coder:agy" overrides it.
+        // Overrides are keyed on template indices and so can never address an
+        // added role, which is why the tool travels with the entry instead.
+        let (id, cli) = match entry.split_once(':') {
+            Some((id, cli)) => (id, Some(cli)),
+            None => (entry.as_str(), None),
+        };
         let role = addable
             .iter()
-            .find(|r| &r.id == id)
+            .find(|r| r.id == id)
             .ok_or_else(|| format!("no role '{id}' to add"))?;
-        request = request.add_pane(role.spec.clone());
+        let mut spec = role.spec.clone();
+        if let Some(cli) = cli {
+            if !registry.contains(cli) {
+                return Err(format!("no tool '{cli}' in the registry"));
+            }
+            spec.cli = cli.to_string();
+            // The role's default flags belong to its default tool. Carrying
+            // them onto a different CLI is exactly the bug the plan builder
+            // already guards against for template panes.
+            spec.flags = String::new();
+        }
+        request = request.add_pane(spec);
     }
     let plan = launcher_core::plan::plan(&request, &registry).map_err(|e| e.to_string())?;
     Ok((plan, registry, settings))
