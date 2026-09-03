@@ -157,3 +157,21 @@ pub fn load_templates_from(
     templates.validate_against(registry)?;
     Ok(templates)
 }
+
+/// Templates for a launch into `project`: built-ins, the user's overrides,
+/// and the project's own team when it has a valid one.
+///
+/// A repo team that fails to load comes back in the second slot instead of
+/// failing the call, so a typo in `.herdr/team.toml` can be shown next to a
+/// team list that still works.
+pub fn load_templates_for(
+    project: &std::path::Path,
+    registry: &Registry,
+) -> Result<(Templates, Option<ConfigError>)> {
+    let templates = load_templates(registry)?;
+    Ok(match crate::template::load_repo_team(project, registry) {
+        None => (templates, None),
+        Some(Ok(team)) => (templates.with_repo_team(team), None),
+        Some(Err(e)) => (templates, Some(e)),
+    })
+}

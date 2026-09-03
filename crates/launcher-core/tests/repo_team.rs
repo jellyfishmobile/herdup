@@ -186,3 +186,85 @@ fn with_repo_team_offers_it_under_repo_and_replaces_an_earlier_one() {
     );
     assert_eq!(templates.len(), Templates::builtin().len() + 1);
 }
+
+use launcher_core::config::load_templates_for;
+use launcher_core::plan::{plan, LaunchRequest};
+
+#[test]
+fn load_templates_for_merges_a_valid_team() {
+    let project = scratch("merge");
+    write_team(&project, VALID);
+    let registry = Registry::builtin();
+    let (templates, error) = load_templates_for(&project, &registry).expect("loads");
+    assert!(error.is_none());
+    assert!(templates.get(REPO_TEMPLATE_ID).is_some());
+    assert!(templates.get("squad").is_some(), "built-ins are kept");
+    std::fs::remove_dir_all(&project).unwrap();
+}
+
+#[test]
+fn load_templates_for_reports_a_bad_team_and_keeps_the_builtins() {
+    let project = scratch("bad");
+    write_team(&project, "display_name = 1\n");
+    let registry = Registry::builtin();
+    let (templates, error) = load_templates_for(&project, &registry).expect("loads");
+    assert!(templates.get(REPO_TEMPLATE_ID).is_none());
+    assert!(templates.get("squad").is_some());
+    let error = error.expect("the bad file is reported");
+    assert!(error.to_string().contains("team.toml"), "{error}");
+    std::fs::remove_dir_all(&project).unwrap();
+}
+
+#[test]
+fn load_templates_for_without_a_file_is_just_the_templates() {
+    let project = scratch("plain");
+    let registry = Registry::builtin();
+    let (templates, error) = load_templates_for(&project, &registry).expect("loads");
+    assert!(error.is_none());
+    assert!(templates.get(REPO_TEMPLATE_ID).is_none());
+    std::fs::remove_dir_all(&project).unwrap();
+}
+
+#[test]
+fn a_repo_team_plans_like_the_same_builtin() {
+    // The duo shape, written as a repo team, must plan identically to duo.
+    let registry = Registry::builtin();
+    let builtin = Templates::builtin();
+    let duo = builtin.get("duo").expect("duo exists");
+    let mut text = String::from("display_name = \"Duo\"\ndescription = \"d\"\n");
+    for pane in &duo.panes {
+        text.push_str("\n[[pane]]\n");
+        text.push_str(&format!(
+            "role = {:?}\ncli = {:?}\nflags = {:?}\nbriefing = {:?}\n",
+            pane.role, pane.cli, pane.flags, pane.briefing
+        ));
+        if pane.coordinator {
+            text.push_str("coordinator = true\n");
+        }
+        if let Some(split) = &pane.split {
+            // Serialise the split the way templates.toml writes it.
+            let direction = format!("{:?}", split.direction).to_lowercase();
+            match split.ratio {
+                Some(r) => text.push_str(&format!(
+                    "split = {{ direction = \"{direction}\", ratio = {r}, from = {} }}\n",
+                    split.from
+                )),
+                None => text.push_str(&format!(
+                    "split = {{ direction = \"{direction}\", from = {} }}\n",
+                    split.from
+                )),
+            }
+        }
+    }
+    let repo = parse_repo_team(&text, "team.toml", Path::new("/work/demo"), &registry).unwrap();
+    let project = Path::new("/work/demo");
+    let a = plan(&LaunchRequest::new(project, duo), &registry).unwrap();
+    let b = plan(&LaunchRequest::new(project, &repo), &registry).unwrap();
+    let shape = |p: &launcher_core::plan::LaunchPlan| {
+        p.panes
+            .iter()
+            .map(|x| (x.role.clone(), x.cli.clone(), x.command.clone()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(shape(&a), shape(&b));
+}
