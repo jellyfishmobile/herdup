@@ -492,8 +492,9 @@ settings round trip. The Tauri layer is verified by QA against a local feed.
       stayed at 0.1.0; the startup check against the real feed (private repo,
       404) stayed silent; the manual check said "could not check: no published
       release"; the top bar showed the running version, v0.1.0.
-- [ ] The translocation text — a copy opened straight from the disk image told
-      to move to Applications — pending.
+- [ ] The translocation text. QA confirmed macOS translocates a quarantined
+      copy and holds it stopped behind the Gatekeeper prompt, but the prompt
+      was answered with Move to Trash, so the banner text was never seen.
 - [ ] Windows: unverified — no Windows machine in this effort.
 - [ ] Linux: unverified — the build has not been run by a human.
 - [ ] First real signed release published and an installed copy updated from it.
