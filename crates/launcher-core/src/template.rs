@@ -5,9 +5,16 @@ use crate::herdr::types::SplitDirection;
 use crate::registry::Registry;
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 const BUILTIN: &str = include_str!("../assets/templates.toml");
 const ADDABLE: &str = include_str!("../assets/addable.toml");
+
+/// The id under which a repository's own team is offered. Reserved: a user
+/// template with this id is replaced by the repository's file when one exists.
+pub const REPO_TEMPLATE_ID: &str = "repo";
+/// Where a repository keeps its team, relative to the project folder.
+pub const REPO_TEAM_FILE: &str = ".herdr/team.toml";
 
 /// Where a pane comes from, relative to panes created before it.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
@@ -102,6 +109,78 @@ struct RawTemplate {
     display_name: String,
     description: String,
     pane: Vec<PaneSpec>,
+}
+
+/// The bare shape of `.herdr/team.toml`: the top level *is* the team.
+///
+/// `display_name` is optional because the folder name is usually right.
+/// Unknown keys are rejected so a file written in the `templates.toml` shape,
+/// with a wrapping `[squad]` table, fails naming that key rather than loading
+/// as an empty team.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawRepoTeam {
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    description: String,
+    pane: Vec<PaneSpec>,
+}
+
+/// A repository's own team, from `<project>/.herdr/team.toml`.
+///
+/// `None` when there is no file. `Some(Err)` for anything wrong with a file
+/// that exists — unreadable, malformed, an invariant broken, an unknown CLI —
+/// so a typo is reported rather than silently ignored.
+pub fn load_repo_team(project: &Path, registry: &Registry) -> Option<Result<Template>> {
+    let path = project.join(REPO_TEAM_FILE);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(source) => {
+            return Some(Err(ConfigError::Io {
+                file: path.display().to_string(),
+                source,
+            }))
+        }
+    };
+    Some(parse_repo_team(
+        &text,
+        &path.display().to_string(),
+        project,
+        registry,
+    ))
+}
+
+/// Parse the bare team shape and validate it exactly as a built-in is.
+///
+/// `project` supplies the default display name; `file` is only for messages.
+pub fn parse_repo_team(
+    text: &str,
+    file: &str,
+    project: &Path,
+    registry: &Registry,
+) -> Result<Template> {
+    let raw: RawRepoTeam = toml::from_str(text).map_err(|source| ConfigError::Toml {
+        file: file.to_string(),
+        source,
+    })?;
+    let folder = project
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| project.display().to_string());
+    let template = Template {
+        id: REPO_TEMPLATE_ID.to_string(),
+        display_name: raw
+            .display_name
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or(folder),
+        description: raw.description,
+        panes: raw.pane,
+    };
+    validate_structure(&template)?;
+    validate_clis(&template, registry)?;
+    Ok(template)
 }
 
 /// A role the user can add to a team beyond whatever its template supplies.
@@ -210,20 +289,21 @@ impl Templates {
         Ok(self)
     }
 
+    /// Offer a repository's own team under [`REPO_TEMPLATE_ID`].
+    ///
+    /// Replaces an earlier `repo` entry, including one a user wrote in their
+    /// own `templates.toml`: the repository's file wins for that repository.
+    /// Ordering is the caller's business; the GUI lists it first.
+    pub fn with_repo_team(mut self, team: Template) -> Templates {
+        self.templates.insert(REPO_TEMPLATE_ID.to_string(), team);
+        self
+    }
+
     /// Check every pane's `cli` resolves in `registry`.
     pub fn validate_against(&self, registry: &Registry) -> Result<()> {
-        for template in self.templates.values() {
-            for pane in &template.panes {
-                if !registry.contains(&pane.cli) {
-                    return Err(ConfigError::UnknownCli {
-                        template: template.id.clone(),
-                        role: pane.role.clone(),
-                        cli: pane.cli.clone(),
-                    });
-                }
-            }
-        }
-        Ok(())
+        self.templates
+            .values()
+            .try_for_each(|t| validate_clis(t, registry))
     }
 
     pub fn get(&self, id: &str) -> Option<&Template> {
@@ -241,6 +321,20 @@ impl Templates {
     pub fn iter(&self) -> impl Iterator<Item = &Template> {
         self.templates.values()
     }
+}
+
+/// Every pane's `cli` must be a registry entry.
+fn validate_clis(template: &Template, registry: &Registry) -> Result<()> {
+    for pane in &template.panes {
+        if !registry.contains(&pane.cli) {
+            return Err(ConfigError::UnknownCli {
+                template: template.id.clone(),
+                role: pane.role.clone(),
+                cli: pane.cli.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Enforce the layout invariants a plan generator depends on.

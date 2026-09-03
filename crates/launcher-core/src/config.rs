@@ -15,6 +15,13 @@ pub enum ConfigError {
         source: toml::de::Error,
     },
 
+    #[error("{file}: {source}")]
+    Io {
+        file: String,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error(
         "registry entry '{id}' is new (not a built-in) so it must set {missing}; \
          overrides of built-in entries may omit fields, new entries may not"
