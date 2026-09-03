@@ -85,12 +85,17 @@ impl HerdrCli {
         if let Some(path) = which("herdr") {
             return Ok(HerdrCli::new(path));
         }
-        for candidate in default_install_paths() {
-            if is_runnable(&candidate) {
-                return Ok(HerdrCli::new(candidate));
-            }
-        }
-        Err(HerdrError::NotFound)
+        first_runnable(default_install_paths()).ok_or(HerdrError::NotFound)
+    }
+
+    /// Whether the version probe fails before herdr even runs, with the one
+    /// error the mode bits cannot rule out.
+    fn spawn_is_denied(&self) -> bool {
+        matches!(
+            self.version(),
+            Err(HerdrError::Spawn { source, .. })
+                if source.kind() == std::io::ErrorKind::PermissionDenied
+        )
     }
 
     // ---- version -------------------------------------------------------
@@ -670,13 +675,32 @@ pub fn which(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-/// Whether an install-path candidate is something we could actually spawn.
+/// The first candidate this process can actually run.
+///
+/// [`is_runnable`] is the cheap filter, and it can still be fooled: mode bits
+/// only say that *someone* may execute the file, so `0o001` passes and then
+/// spawns with "Permission denied" for the owner. std exposes neither
+/// `access(2)` nor the uid, so the honest check is the spawn itself — the
+/// version probe every caller performs next is run here, and a candidate that
+/// refuses it is skipped rather than reported found. Any other outcome keeps
+/// the candidate, so a broken install still surfaces with its real error
+/// instead of a misleading "not found".
+fn first_runnable(candidates: impl IntoIterator<Item = PathBuf>) -> Option<HerdrCli> {
+    candidates
+        .into_iter()
+        .filter(|candidate| is_runnable(candidate))
+        .map(HerdrCli::new)
+        .find(|cli| !cli.spawn_is_denied())
+}
+
+/// Whether an install-path candidate looks like something we could spawn.
 ///
 /// A regular file is necessary but, on Unix, not sufficient: a stray
 /// non-executable `~/.local/bin/herdr` (a half-finished download, a hand-written
 /// placeholder) would otherwise be reported as found, and the failure only
 /// surfaces later as "Permission denied" from spawn. Windows has no execute
-/// bit, so there a regular file is the whole check.
+/// bit, so there a regular file is the whole check. The bits are only a
+/// filter; [`first_runnable`] has the last word.
 fn is_runnable(path: &Path) -> bool {
     let Ok(meta) = std::fs::metadata(path) else {
         return false;
@@ -796,6 +820,43 @@ mod tests {
             "a directory has the execute bit but is not a candidate"
         );
         assert!(!is_runnable(&dir.join("missing").join("herdr")));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Mode bits only say that *someone* may execute the file. A `0o001`
+    /// candidate passes them and still fails to spawn for its owner, so the
+    /// selection must probe, skip it, and fall through to the next one.
+    #[cfg(unix)]
+    #[test]
+    fn unix_candidates_the_owner_cannot_execute_are_skipped() {
+        use super::first_runnable;
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+        let dir = std::env::temp_dir().join(format!("herdup-herdr-deny-{}", std::process::id()));
+        let denied = dir.join("denied").join("herdr");
+        let usable = dir.join("usable").join("herdr");
+        for path in [&denied, &usable] {
+            std::fs::create_dir_all(path.parent().unwrap()).expect("create temp dir");
+            std::fs::write(path, b"#!/bin/sh\necho herdr 0.8.2\n").expect("write candidate");
+        }
+        // root may execute anything with any execute bit, so the case does not
+        // exist there.
+        if std::fs::metadata(&denied).unwrap().uid() == 0 {
+            eprintln!("skipping: running as root");
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0o001)).unwrap();
+        std::fs::set_permissions(&usable, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let found = first_runnable(vec![denied.clone(), usable.clone()])
+            .expect("the 0o755 candidate is runnable");
+        assert_eq!(found.exe, usable, "the 0o001 candidate must be skipped");
+        assert!(
+            first_runnable(vec![denied.clone()]).is_none(),
+            "a candidate only others may execute is not found"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
