@@ -29,6 +29,10 @@ pub struct Settings {
     /// Command used to hand off to a terminal. Platform default when unset.
     #[serde(default)]
     pub terminal: Option<String>,
+    /// Where to look for a newer herdup. Unset means the public GitHub release
+    /// feed; QA points this at a local server. Never a credential.
+    #[serde(default)]
+    pub update_endpoint: Option<String>,
     #[serde(default)]
     pub verified: Vec<VerifiedRecord>,
 }
