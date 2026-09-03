@@ -21,6 +21,7 @@ pub mod registry;
 pub mod settings;
 pub mod template;
 pub mod terminal;
+pub mod update;
 
 pub use config::ConfigError;
 pub use herdr::{HerdrCli, HerdrError};
