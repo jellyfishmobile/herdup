@@ -550,3 +550,22 @@ main section.direction { padding: 28px 24px 32px; }
 .face.left { fill: color-mix(in srgb, var(--card) 54%, var(--ink) 46%); }
 .face.right { fill: color-mix(in srgb, var(--card) 66%, var(--ink) 34%); }
 .face { stroke: color-mix(in srgb, var(--ink) 30%, transparent); }
+
+/* Concurrency, expressed visually. */
+.iso-edge.fan { stroke-width: 1.4; opacity: 0.32; }
+.iso-packet.hot { fill: var(--acc); }
+.iso-packet:not(.hot) { fill: color-mix(in srgb, var(--acc) 45%, var(--faint)); filter: none; }
+
+/* Each station breathes on its own tempo, so none of them look like they are
+   idling until a token arrives. */
+@keyframes iso-busy {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.iso-node.busy .face.top {
+  animation: iso-busy var(--pulse-dur, 2.6s) ease-in-out infinite;
+  animation-delay: var(--pulse-delay, 0s);
+}
+@media (prefers-reduced-motion: reduce) {
+  .iso-node.busy .face.top { animation: none; }
+}

@@ -164,6 +164,29 @@
       loopPts.push(`${p.px.toFixed(1)},${p.py.toFixed(1)}`);
     });
 
+    // The daemon hands work to several agents at once, so draw it as a fan
+    // rather than a single line into a box. A one-to-one arrow would say the
+    // team takes one task at a time.
+    (() => {
+      const d = byId("daemon");
+      const t = byId("team");
+      [
+        [-0.28, -0.28],
+        [0.28, -0.28],
+        [-0.28, 0.28],
+        [0.28, 0.28],
+      ].forEach(([dx, dy]) => {
+        const p1 = iso(d.x, d.y, 6);
+        const p2 = iso(t.x + dx, t.y + dy, 10);
+        edges.appendChild(
+          el("path", {
+            class: "iso-edge fan",
+            d: `M ${p1.px.toFixed(1)} ${p1.py.toFixed(1)} L ${p2.px.toFixed(1)} ${p2.py.toFixed(1)}`,
+          }),
+        );
+      });
+    })();
+
     // The travelling request. One closed polyline is easier to follow than six
     // separate tweens, and it makes the circuit unmistakable.
     const loop = el("polygon", { class: "iso-loop", points: loopPts.join(" ") });
@@ -193,8 +216,16 @@
     svg.appendChild(edges);
     svg.appendChild(nodes);
 
-    const packet = el("circle", { class: "iso-packet", r: 7, cx: 0, cy: 0 });
-    svg.appendChild(packet);
+    // MANY packets, not one. A single token circulating implies the system is
+    // serial and blocking — that one request must finish its lap before the
+    // next moves. It is the opposite: the client keeps writing, the PM keeps
+    // assigning, and the workers run independently. The picture has to say so.
+    const packets = [];
+    for (let i = 0; i < 7; i++) {
+      const c = el("circle", { class: "iso-packet" + (i % 3 === 0 ? " hot" : ""), r: i % 3 === 0 ? 7 : 5, cx: 0, cy: 0 });
+      svg.appendChild(c);
+      packets.push(c);
+    }
 
     host.appendChild(svg);
 
@@ -206,10 +237,10 @@
       `${box.x - pad} ${box.y - pad} ${box.width + pad * 2} ${box.height + pad * 2}`,
     );
 
-    return { svg, packet, loop };
+    return { svg, packets, loop };
   }
 
-  function animate({ packet, loop }, host) {
+  function animate({ packets, loop }, host) {
     if (!window.gsap) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -224,11 +255,10 @@
     });
 
     if (reduced) {
-      packet.setAttribute("opacity", "0");
+      packets.forEach((p) => p.setAttribute("opacity", "0"));
       return;
     }
 
-    // Walk the packet around the closed circuit, corner to corner.
     const pts = loop
       .getAttribute("points")
       .trim()
@@ -236,20 +266,34 @@
       .map((p) => p.split(",").map(Number));
     const seq = pts.concat([pts[0]]);
 
-    const tl = gsap.timeline({ repeat: -1, defaults: { ease: "none" } });
-    seq.forEach(([x, y], i) => {
-      if (i === 0) {
-        gsap.set(packet, { attr: { cx: x, cy: y } });
-        return;
-      }
-      tl.to(packet, { attr: { cx: x, cy: y }, duration: 1.1 })
-        // A beat at each station: work happens there, it is not a courier run.
-        .to(packet, { attr: { r: 10 }, duration: 0.16, yoyo: true, repeat: 1 });
+    // One timeline per packet, each started at a different point and running at
+    // a slightly different speed, so they drift apart instead of marching in
+    // lockstep. No dwell at stations: nothing is waiting its turn.
+    const timelines = packets.map((packet, i) => {
+      const tl = gsap.timeline({ repeat: -1, defaults: { ease: "none" } });
+      seq.forEach(([x, y], n) => {
+        if (n === 0) {
+          gsap.set(packet, { attr: { cx: x, cy: y } });
+          return;
+        }
+        tl.to(packet, { attr: { cx: x, cy: y }, duration: 1.0 });
+      });
+      tl.timeScale(0.8 + (i % 4) * 0.12);
+      tl.progress((i / packets.length + (i % 3) * 0.04) % 1);
+      return tl;
     });
 
-    // Pause when off screen rather than spinning a timeline nobody can see.
+    // Every station works at its own tempo, so none of them look like they are
+    // idling until a token arrives.
+    host.querySelectorAll(".iso-node").forEach((n, i) => {
+      n.style.setProperty("--pulse-delay", (i * 0.47).toFixed(2) + "s");
+      n.style.setProperty("--pulse-dur", (2.4 + (i % 3) * 0.6).toFixed(2) + "s");
+      n.classList.add("busy");
+    });
+
     const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => (e.isIntersecting ? tl.play() : tl.pause())),
+      (entries) =>
+        entries.forEach((e) => timelines.forEach((tl) => (e.isIntersecting ? tl.play() : tl.pause()))),
       { threshold: 0 },
     );
     io.observe(host);
