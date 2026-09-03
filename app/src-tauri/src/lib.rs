@@ -244,14 +244,41 @@ fn load() -> Result<(Registry, Templates, Settings), String> {
     Ok((registry, templates, Settings::load()))
 }
 
+/// Plan for display: no herdr calls at all.
+///
+/// `preview_plan` runs this on every keystroke and every team change, so it must
+/// stay cheap. Agent names are not shown in the UI, so a preview does not need
+/// to know which are taken.
 fn build_plan(options: &LaunchOptions) -> Result<(LaunchPlan, Registry, Settings), String> {
+    build_plan_inner(options, Vec::new())
+}
+
+/// Plan for a real launch, avoiding agent names the session already uses.
+///
+/// Agent names are unique per herdr *session*, so starting a second team while a
+/// first is running would otherwise ask for `pm` again and be rejected with
+/// `agent_name_taken` partway through. Only the launch path pays for the extra
+/// herdr call; best-effort, since a server that cannot be reached has no agents
+/// to collide with and preflight reports that separately.
+fn build_launch_plan(options: &LaunchOptions) -> Result<(LaunchPlan, Registry, Settings), String> {
+    let taken: Vec<String> = client()
+        .and_then(|c| c.agent_list().map_err(|e| e.to_string()))
+        .map(|agents| agents.into_iter().map(|a| a.name).collect())
+        .unwrap_or_default();
+    build_plan_inner(options, taken)
+}
+
+fn build_plan_inner(
+    options: &LaunchOptions,
+    reserved: Vec<String>,
+) -> Result<(LaunchPlan, Registry, Settings), String> {
     let (registry, templates, settings) = load()?;
     let template = templates
         .get(&options.template)
         .ok_or_else(|| format!("no template '{}'", options.template))?;
 
     let project = PathBuf::from(&options.project);
-    let mut request = LaunchRequest::new(&project, template);
+    let mut request = LaunchRequest::new(&project, template).reserving(reserved);
     for index in &options.skip {
         request = request.skip_pane(*index);
     }
@@ -640,7 +667,9 @@ fn first_run_dto(session: &FirstRunSession) -> Vec<FirstRunPaneDto> {
 #[tauri::command]
 async fn launch(app: tauri::AppHandle, options: LaunchOptions) -> Result<OutcomeDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let (plan, _, _) = build_plan(&options)?;
+        // The only path that actually starts agents, so the only one that needs
+        // to know which agent names the session already owns.
+        let (plan, _, _) = build_launch_plan(&options)?;
         let cli = client()?;
         preflight::ensure_server(&cli, Duration::from_secs(20)).map_err(|e| e.to_string())?;
 

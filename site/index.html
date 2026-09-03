@@ -6,25 +6,26 @@
     <title>herdup — put a team of AIs on your code</title>
     <meta
       name="description"
-      content="A desktop launcher for herdr. Pick a project, pick a team, and herdup starts several AI coding agents side by side in one terminal."
+      content="A desktop launcher for herdr. Pick a project, pick a team, and herdup starts several AI coding agents side by side in one terminal — in about twenty seconds."
     />
     <meta property="og:title" content="herdup" />
     <meta
       property="og:description"
-      content="Put a team of AI coding agents on your project, in one terminal, in about twenty seconds."
+      content="One agent is a better autocomplete. A team is a different thing — but the setup cost stops most people finding out. herdup removes the setup cost."
     />
     <meta property="og:image" content="/img/hero.png" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" as="image" href="/img/hero.png" />
-    <link rel="stylesheet" href="/styles.css?v=9" />
+    <link rel="stylesheet" href="/styles.css?v=10" />
   </head>
   <body>
     <header class="top">
       <a class="mark" href="#top">herdup</a>
       <nav>
-        <a href="#requirements">Requirements</a>
+        <a href="#argument">The argument</a>
+        <a href="#direction">Where it’s going</a>
         <a href="#supported">Supported tools</a>
         <a href="#download">Download</a>
         <a href="https://github.com/jellyfishmobile/herdup">GitHub</a>
@@ -43,8 +44,9 @@
       <div class="hero-copy">
         <h1>Put a team of AIs on your code.</h1>
         <p class="lede">
-          One coding agent is easy. A team of them is a mess of terminals, flags and prompts.
-          herdup does that setup and hands you the reins.
+          One agent is a better autocomplete. A team of them is a different kind of thing — but
+          almost nobody finds out, because the setup is brutal. herdup does that setup in about
+          twenty seconds and hands you the reins.
         </p>
         <div class="cta">
           <a class="btn solid" href="#download">Download</a>
@@ -61,7 +63,8 @@
     <!-- ============================================================
          The story. One canvas persists for the whole section: the
          points scatter, gather, then resolve into the four lanes the
-         app actually builds.
+         app actually builds. The fourth beat holds on the resolved
+         lanes and carries the thesis.
          ============================================================ -->
     <section id="story">
       <canvas id="field" aria-hidden></canvas>
@@ -101,9 +104,60 @@
         </div>
       </div>
 
+      <div class="beat">
+        <div class="beat-in">
+          <span class="step">04</span>
+          <h2>The bottleneck was never typing.</h2>
+          <p>
+            It is how much you can hold in your head while four things happen at once. No amount of
+            faster typing moves that line. herdup starts at the cheapest end of the problem — the
+            attention you were spending on setup, before any work began.
+          </p>
+        </div>
+      </div>
+
       <!-- Scroll room so the resolved lanes hold on screen before the
            canvas leaves. Without it the payoff flashes past. -->
       <div class="beat-hold" aria-hidden></div>
+    </section>
+
+    <!-- ============================================================
+         The ideology. This is a point of view, stated as one, and it
+         is careful to end by pointing at the not-built section rather
+         than implying any of it ships.
+         ============================================================ -->
+    <section id="argument" class="argument">
+      <p class="eyebrow rise">The argument</p>
+      <h2 class="rise big">Your scarce resource is attention, not typing.</h2>
+
+      <p class="rise lead-para">
+        One agent is a better autocomplete. That is genuinely useful, and it does not change what
+        you are. A team is a different kind of thing — the work gets divided, the parts proceed at
+        once, and you move from writing to deciding. Almost nobody gets that far.
+      </p>
+      <p class="rise">
+        They don’t get there because the setup cost is brutal, and the cost is paid in the wrong
+        currency. Four terminals, four sets of permission flags, the same trust prompt four times,
+        briefing each one by hand. People quit before the interesting part and conclude a team isn’t
+        worth it — when what they actually measured was the tax.
+      </p>
+      <p class="rise">
+        The deeper point is the one worth arguing about. The bottleneck was never how fast you write
+        code. It is how much context you can hold while four things happen at once. Every tool so
+        far has made the typing faster and left the attention problem exactly where it was — and
+        then handed you three more things to watch.
+      </p>
+      <p class="rise">
+        The direction here is the opposite of that. You say what you want, in plain language. What
+        comes back is a summary a human can actually hold in their head. You stay the client. The
+        team does the standing around.
+      </p>
+
+      <p class="rise caveat">
+        This is an opinion, not a result. It is unproven, and it may be wrong. What exists today is
+        the first honest piece of it — the setup cost, removed, and nothing else. The rest of the
+        argument is <a href="#direction">written down further below and not built</a>.
+      </p>
     </section>
 
     <!-- ============================================================
@@ -142,15 +196,105 @@
 
     <main>
       <section id="objective">
-        <h2 class="rise">What it’s for</h2>
+        <h2 class="rise">What it does today</h2>
         <p class="rise">
-          herdup is a launcher, not a wrapper. It does the setup — layout, startup, readiness,
-          briefing — and then gets out of the way and gives you the terminal. Once your team is
-          running, herdup is not in the loop and not between you and your tools.
+          herdup is a launcher, not a wrapper. You pick a project folder and a team size — one, two,
+          four or six — and add or remove teammates until the line-up is the one you want. Then it
+          builds the herdr layout, starts each agent CLI, waits until each is genuinely at its
+          prompt, and hands each one its briefing. About twenty seconds.
         </p>
         <p class="rise">
-          Several projects can run at once. Each launch gets its own workspace, so a team working
-          on one repo keeps going while you start another.
+          After that it gets out of the way and gives you the terminal. Once your team is running,
+          herdup is not in the loop and not between you and your tools. Several projects can run at
+          once; each launch gets its own herdr workspace, so a team working on one repo keeps going
+          while you start another.
+        </p>
+        <p class="rise">
+          It warns you before starting if the folder has no version history or has uncommitted work,
+          and it will not type into an agent that is sitting at an approval dialog. That is the
+          whole product. It is deliberately small.
+        </p>
+      </section>
+
+      <!-- ============================================================
+           NOT BUILT. This section is visually and verbally separated
+           from everything above it on purpose. Nothing described here
+           exists; if that ever stops being true, the treatment has to
+           change with it.
+           ============================================================ -->
+      <section id="direction" class="direction">
+        <div class="notice rise">
+          <span class="tag">Not built yet</span>
+          <p>
+            Nothing in this section exists. No code has been written for it, there is no release it
+            is coming in, and there is nothing here you can download or try. It is a design settled
+            on paper, written down because the argument above is incomplete without it. If you are
+            deciding whether herdup is useful to you, decide on everything <em>above</em> this line.
+          </p>
+        </div>
+
+        <h2 class="rise">Where this is going</h2>
+        <p class="sub rise">The intended shape, in the author’s own words:</p>
+
+        <blockquote class="rise">
+          <p>
+            herdr is a tmux-like client where you can run multiple terminal instances, but it gives
+            full signal control to the CLI app, which makes inter-terminal communication possible.
+            Run Claude in three panes and all three can talk.
+          </p>
+          <p>
+            herdup builds that workflow — and adds a special “channel” called <strong>client</strong>,
+            which you connect to WhatsApp, Telegram, Slack, email, Google Docs, Discord. It takes
+            everything sent to it and gives it to the PM, which turns whatever arrives into
+            something understandable, executable and actionable for the agents. They all run
+            autonomously, and what comes back to the client is an executive summary: project status,
+            the kanban board, and the conversation between the PM and the agents, like Slack.
+          </p>
+        </blockquote>
+
+        <h3 class="minor rise">Design decisions already settled — still not built</h3>
+        <div class="plan">
+          <article class="planned rise">
+            <span class="pin">Planned</span>
+            <h3>The Client is deliberately not an AI</h3>
+            <p>
+              It is a deterministic pipe and a renderer: it carries messages in and draws summaries
+              out. The PM is the only thing that thinks. Two things that both interpret you is one
+              too many.
+            </p>
+          </article>
+          <article class="planned rise">
+            <span class="pin">Planned</span>
+            <h3>A small local daemon holds the state</h3>
+            <p>
+              SQLite on your own machine, and the only component that talks to herdr. Agents reach
+              it over a unix socket with plain HTTP — no broker, no account, nothing leaving the
+              box.
+            </p>
+          </article>
+          <article class="planned rise">
+            <span class="pin">Planned</span>
+            <h3>Delegation routes through that daemon</h3>
+            <p>
+              Which makes the Slack-style thread a by-product of the real traffic rather than a log
+              somebody has to maintain. If the conversation is the mechanism, it cannot drift out of
+              date.
+            </p>
+          </article>
+          <article class="planned rise">
+            <span class="pin">Planned</span>
+            <h3>No screenshots here, on purpose</h3>
+            <p>
+              There is no interface to photograph, so there is nothing to show. Every image on this
+              page is a capture of software that runs today. None will be added for this section
+              until it is real.
+            </p>
+          </article>
+        </div>
+
+        <p class="fineprint rise">
+          No schedule, no promise, no waiting list. It is written down so the page argues honestly
+          rather than hinting. Everything above this section is the part that exists.
         </p>
       </section>
 
@@ -317,7 +461,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-    <script src="/scroll.js?v=9"></script>
+    <script src="/scroll.js?v=10"></script>
     <script>
       // The hero video is an upgrade on the still, not a requirement: it only
       // swaps in once it can actually play, and never for reduced-motion.

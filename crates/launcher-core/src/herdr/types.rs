@@ -186,6 +186,11 @@ pub(crate) struct PaneList {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub(crate) struct AgentList {
+    pub agents: Vec<AgentInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct WorkspaceList {
     pub workspaces: Vec<Workspace>,
 }

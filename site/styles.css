@@ -281,3 +281,89 @@ main section { padding: 56px 0; }
 
 /* Scroll room after the last beat so the resolved lanes are held, not flashed. */
 .beat-hold { height: 60vh; position: relative; z-index: 1; }
+
+/* ==================================================================
+   The argument
+   The one section allowed to be long-form and opinionated. Wider type,
+   fewer objects, no cards — it should read like someone talking.
+   ================================================================== */
+
+.argument {
+  max-width: 900px; margin: 0 auto; padding: 72px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.argument h2.big {
+  font-size: clamp(28px, 4.2vw, 40px); line-height: 1.1;
+  max-width: 20ch; margin-bottom: 26px;
+}
+.argument p { font-size: 16.5px; color: var(--dim); max-width: 62ch; margin-bottom: 18px; }
+.argument .lead-para { font-size: 19px; line-height: 1.55; color: var(--ink); max-width: 54ch; }
+.argument .caveat {
+  margin: 32px 0 0; padding-top: 20px; border-top: 1px solid var(--rule);
+  font-size: 14.5px; color: var(--faint);
+}
+
+/* ==================================================================
+   Where this is going — NOT BUILT
+   This has to be unmistakable at a glance, before a word is read, so
+   nothing here shares a treatment with the real sections: dashed rules
+   instead of solid, a blueprint hatch instead of a card fill, and
+   headings a step quieter than the ones describing shipped behaviour.
+   If any of this ever ships, it must move out of here rather than have
+   the styling softened.
+   ================================================================== */
+
+.direction {
+  /* Stronger than --acc-line: the frame is the thing that says "different
+     kind of content" before anyone reads the badge, so it has to survive the
+     light palette, where a hairline this pale all but disappears. */
+  border: 1px dashed color-mix(in srgb, var(--warn) 45%, transparent);
+  border-radius: var(--radius);
+  padding: 28px 24px 32px;
+  margin: 48px 0;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 11px,
+    color-mix(in srgb, var(--acc) 5%, transparent) 11px 12px
+  );
+}
+main section.direction { padding: 28px 24px 32px; }
+
+.direction .notice {
+  display: grid; gap: 11px;
+  border: 1px solid var(--acc-line); border-radius: var(--radius);
+  background: var(--acc-soft); padding: 16px 18px; margin-bottom: 32px;
+}
+.direction .notice p { margin: 0; max-width: 68ch; color: var(--ink); font-size: 14.5px; }
+.tag {
+  justify-self: start; background: var(--pa);
+  font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700;
+  color: var(--warn); border: 1px solid var(--warn); border-radius: 999px; padding: 3px 11px;
+}
+
+.direction > h2 { margin-bottom: 8px; }
+.direction > .sub { margin-bottom: 18px; }
+
+.direction blockquote {
+  margin: 0; padding: 2px 0 2px 20px;
+  border-left: 2px solid var(--acc-line); color: var(--dim);
+}
+.direction blockquote p { font-size: 16px; max-width: 64ch; }
+.direction blockquote p:last-child { margin-bottom: 0; }
+.direction blockquote strong { color: var(--acc); font-weight: 700; }
+
+.plan { display: grid; gap: 12px; grid-template-columns: 1fr; margin-bottom: 24px; }
+@media (min-width: 700px) { .plan { grid-template-columns: 1fr 1fr; } }
+.planned {
+  border: 1px dashed var(--rule); border-radius: var(--radius); padding: 18px;
+  background: color-mix(in srgb, var(--card) 62%, transparent);
+}
+/* Quieter than a real feature card, on purpose. */
+.planned h3 { margin: 9px 0 6px; color: var(--dim); }
+.planned p { margin: 0; color: var(--faint); font-size: 14.5px; }
+.pin {
+  font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase;
+  font-weight: 700; color: var(--warn);
+}
+
+.direction > .fineprint { margin: 0; }

@@ -130,8 +130,14 @@ function startField(canvas) {
     // 0 → A: scatter becomes a herd. A → B: the herd becomes the lanes.
     // B → 1: HOLD. The payoff has to finish well before the canvas scrolls
     // away, or the one thing the whole section builds to is never seen.
-    const A = 0.34;
-    const B = 0.70;
+    //
+    // A and B are tuned to where the beats actually sit, so they have to move
+    // whenever a beat is added or its copy changes length. Measured with the
+    // four current beats, the beats centre at t ≈ 0.24, 0.45, 0.66 and 0.87.
+    // So: still gathering under beat 1, a settled herd for beat 2, the lanes
+    // resolving exactly as beat 3 is read, and a full hold under beat 4.
+    const A = 0.4;
+    const B = 0.68;
     const gathering = t < A;
     const phase = gathering ? t / A : Math.min(1, (t - A) / (B - A));
     const from = gathering ? L.scatter : L.gather;

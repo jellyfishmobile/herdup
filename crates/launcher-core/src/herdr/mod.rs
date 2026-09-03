@@ -22,7 +22,7 @@ use serde::de::DeserializeOwned;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use types::{AgentEnvelope, PaneInfo, PaneList, WorkspaceList};
+use types::{AgentEnvelope, AgentList, PaneInfo, PaneList, WorkspaceList};
 
 /// Minimum herdr this design supports.
 ///
@@ -326,6 +326,16 @@ impl HerdrCli {
         a.push(timeout_ms.to_string());
         let env: AgentEnvelope = self.run_json_agent("agent prompt", target, &a)?;
         Ok(env.agent)
+    }
+
+    /// Every agent in the session, across all workspaces.
+    ///
+    /// Agent names are unique per *session*, not per workspace, so a launch has
+    /// to know what is already taken — otherwise starting a second team reuses
+    /// `pm`, `coder-1`… and herdr rejects it with `agent_name_taken`.
+    pub fn agent_list(&self) -> Result<Vec<AgentInfo>> {
+        let list: AgentList = self.run_json("agent list", &args(["agent", "list"]))?;
+        Ok(list.agents)
     }
 
     pub fn agent_get(&self, target: &str) -> Result<AgentInfo> {

@@ -848,3 +848,62 @@ fn origin_is_the_template_index_and_is_none_for_added_panes() {
         "an added pane has no template index"
     );
 }
+
+// ---------------------------------------------------------------------------
+// agent names are unique per SESSION, not per workspace
+//
+// Regression: launching a second team while a first was still running asked
+// herdr for the name `pm` again and was rejected with agent_name_taken, so the
+// launch stopped partway with one pane created. Found by running the app.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_second_team_avoids_agent_names_the_session_already_uses() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("squad").expect("template exists");
+
+    // What a first squad launch would already have taken.
+    let first = plan(&LaunchRequest::new(project(), t), &reg).expect("plans");
+    let taken: Vec<String> = first
+        .panes
+        .iter()
+        .filter_map(|p| p.agent_name.clone())
+        .collect();
+    assert!(taken.contains(&"pm".to_string()), "got {taken:?}");
+
+    let second = plan(
+        &LaunchRequest::new(project(), t).reserving(taken.clone()),
+        &reg,
+    )
+    .expect("plans");
+
+    for pane in &second.panes {
+        if let Some(name) = &pane.agent_name {
+            assert!(
+                !taken.contains(name),
+                "second team reused agent name {name:?}, which herdr would reject"
+            );
+        }
+    }
+}
+
+#[test]
+fn reserved_names_do_not_change_roles_or_pane_count() {
+    let reg = Registry::builtin();
+    let templates = Templates::builtin();
+    let t = templates.get("squad").expect("template exists");
+
+    let plain = plan(&LaunchRequest::new(project(), t), &reg).expect("plans");
+    let reserved = plan(
+        &LaunchRequest::new(project(), t).reserving(vec!["pm".to_string(), "qa".to_string()]),
+        &reg,
+    )
+    .expect("plans");
+
+    let roles = |p: &launcher_core::plan::LaunchPlan| -> Vec<String> {
+        p.panes.iter().map(|x| x.role.clone()).collect()
+    };
+    assert_eq!(roles(&plain), roles(&reserved), "only the names may differ");
+    assert_eq!(plain.panes.len(), reserved.panes.len());
+}

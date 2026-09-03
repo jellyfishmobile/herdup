@@ -333,6 +333,13 @@ pub struct LaunchRequest<'a> {
     pub skip: BTreeSet<usize>,
     /// Template pane index -> replacement CLI id, e.g. swapping codex for claude.
     pub cli_overrides: BTreeMap<usize, String>,
+    /// Agent names already taken in the herdr session.
+    ///
+    /// Names are unique per session, not per workspace, so launching a second
+    /// team while a first is still running would otherwise ask for `pm` again
+    /// and be rejected with `agent_name_taken`. Passed in rather than queried
+    /// here so planning stays pure.
+    pub reserved_agent_names: Vec<String>,
     /// Panes added beyond the template, in the order the user added them.
     ///
     /// Each attaches to the root pane. These carry no original template index,
@@ -350,6 +357,7 @@ impl<'a> LaunchRequest<'a> {
             workspace_label: None,
             skip: BTreeSet::new(),
             cli_overrides: BTreeMap::new(),
+            reserved_agent_names: Vec::new(),
             extra: Vec::new(),
             await_timeout_ms: 30_000,
         }
@@ -357,6 +365,12 @@ impl<'a> LaunchRequest<'a> {
 
     pub fn skip_pane(mut self, index: usize) -> Self {
         self.skip.insert(index);
+        self
+    }
+
+    /// Names already in use in the session, which this plan must avoid.
+    pub fn reserving(mut self, names: impl IntoIterator<Item = String>) -> Self {
+        self.reserved_agent_names.extend(names);
         self
     }
 
@@ -402,7 +416,7 @@ pub fn plan(request: &LaunchRequest<'_>, registry: &Registry) -> Result<LaunchPl
     // Resolve every CLI before emitting anything, so a bad reference fails the
     // whole plan rather than producing a half-usable one.
     let mut panes = Vec::with_capacity(kept.len());
-    let mut used_names: Vec<String> = Vec::new();
+    let mut used_names: Vec<String> = request.reserved_agent_names.clone();
     for (new_index, k) in kept.iter().enumerate() {
         let cli_id = k
             .original_index
