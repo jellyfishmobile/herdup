@@ -177,7 +177,7 @@ async function main() {
   const fullBody = await (await session.waitFor('[data-testid="step-team"]')).text();
   check(
     "choosing Full team shows the coordinator and all six roles",
-    ["PM", "Coder 1", "Coder 2", "QA", "BuildMaster", "Researcher"].every((r) =>
+    ["PM", "Coder 1", "Coder 2", "QA", "Builds", "Research"].every((r) =>
       fullBody.includes(r),
     ),
   );
@@ -202,7 +202,7 @@ async function main() {
       !afterDrop.includes("Coder 1") &&
       !afterDrop.includes("QA") &&
       afterDrop.includes("Coder 2") &&
-      afterDrop.includes("BuildMaster"),
+      afterDrop.includes("Builds"),
     afterDrop.replace(/\s+/g, " ").slice(0, 160),
   );
 

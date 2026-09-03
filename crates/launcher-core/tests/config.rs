@@ -188,14 +188,7 @@ fn builtin_template_shapes_match_the_spec() {
     let roles: Vec<&str> = full.panes.iter().map(|p| p.role.as_str()).collect();
     assert_eq!(
         roles,
-        vec![
-            "PM",
-            "Coder 1",
-            "Coder 2",
-            "QA",
-            "BuildMaster",
-            "Researcher"
-        ]
+        vec!["PM", "Coder 1", "Coder 2", "QA", "Builds", "Research"]
     );
 }
 

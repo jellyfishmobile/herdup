@@ -99,6 +99,15 @@ class Session {
   async screenshot() {
     return call("GET", this.#p("/screenshot"));
   }
+
+  /// Run JS in the page and return its value.
+  async execute(script, args = []) {
+    return call("POST", this.#p("/execute/sync"), { script, args });
+  }
+
+  async setWindowRect(width, height) {
+    return call("POST", this.#p("/window/rect"), { width, height, x: null, y: null });
+  }
 }
 
 class Element {

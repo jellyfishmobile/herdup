@@ -88,14 +88,7 @@ fn agent_names_are_herdr_legal_and_unique() {
         .collect();
     assert_eq!(
         names,
-        vec![
-            "pm",
-            "coder-1",
-            "coder-2",
-            "qa",
-            "buildmaster",
-            "researcher"
-        ]
+        vec!["pm", "coder-1", "coder-2", "qa", "builds", "research"]
     );
 
     for name in &names {
@@ -243,7 +236,7 @@ fn the_coordinator_briefing_names_every_teammate_with_role_and_cli() {
 
     // Rendered with real ids, it names each teammate, their pane and their CLI.
     let rendered = briefing.render(&|r: PaneRef| format!("w1:p{}", r.0 + 1));
-    for role in ["Coder 1", "Coder 2", "QA", "BuildMaster", "Researcher"] {
+    for role in ["Coder 1", "Coder 2", "QA", "Builds", "Research"] {
         assert!(rendered.contains(role), "briefing omits {role}: {rendered}");
     }
     assert!(
@@ -256,7 +249,7 @@ fn the_coordinator_briefing_names_every_teammate_with_role_and_cli() {
     );
     // Teammates are addressed by agent name, which herdr resolves to whatever
     // pane the agent currently occupies.
-    for name in ["coder-1", "coder-2", "qa", "buildmaster", "researcher"] {
+    for name in ["coder-1", "coder-2", "qa", "builds", "research"] {
         assert!(rendered.contains(name), "briefing omits agent name {name}");
     }
     assert!(rendered.contains("AGENT NAME"));
