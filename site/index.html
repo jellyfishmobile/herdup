@@ -18,7 +18,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" as="image" href="/img/hero.png" />
-    <link rel="stylesheet" href="/styles.css?v=14" />
+    <link rel="stylesheet" href="/styles.css?v=15" />
   </head>
   <body>
     <header class="top">
@@ -279,9 +279,21 @@
           a studio.
         </p>
 
-        <!-- The pipeline, drawn in code so the flow and the labels are
-             actually correct. The generated plate behind it is art direction
-             only — see pipeline.js. -->
+        <!-- The whole solution as one isometric diagram, drawn from a real
+             projection in isometric.js. It has to show the LOOP: the summary
+             returns to the client, who replies. A straight pipeline cannot say
+             that, and the loop is the product. -->
+        <figure id="iso-fig" class="iso-fig rise">
+          <div class="factory-plate" aria-hidden></div>
+          <div id="iso"></div>
+          <figcaption>
+            One request, all the way round. Only <strong>the team</strong> exists today — the
+            launcher builds it in about twenty seconds. Everything else on this loop is designed,
+            not written.
+          </figcaption>
+        </figure>
+
+        <!-- The linear view, kept as the close-up of the middle of that loop. -->
         <figure id="factory" class="factory rise">
           <div class="factory-plate" aria-hidden></div>
 
@@ -571,8 +583,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-    <script src="/scroll.js?v=14"></script>
+    <script src="/scroll.js?v=15"></script>
     <script src="/pipeline.js?v=1"></script>
+    <script src="/isometric.js?v=1"></script>
     <script>
       // The hero video is an upgrade on the still, not a requirement: it only
       // swaps in once it can actually play, and never for reduced-motion.

@@ -483,3 +483,58 @@ main section.direction { padding: 28px 24px 32px; }
 .link::after { border-left-color: var(--faint); }
 @media (max-width: 819px) { .link::after { border-top-color: var(--faint); } }
 .factory figcaption { color: var(--dim); }
+
+/* --- the isometric loop ------------------------------------------ */
+
+.iso-fig {
+  position: relative; margin: 30px 0 26px; padding: 20px 16px 16px;
+  border: 1px solid var(--rule); border-radius: 12px;
+  background: var(--card); overflow: hidden;
+}
+.iso-fig .factory-plate { opacity: 0.1; }
+.iso-fig figcaption {
+  position: relative; z-index: 1; margin-top: 6px;
+  font-size: 12.5px; color: var(--dim); text-wrap: pretty;
+}
+.iso-fig figcaption strong { color: var(--ink); }
+
+#iso { position: relative; z-index: 1; }
+.iso-svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+/* Slab faces. Three tones read as one solid under a single light. */
+.face { stroke: var(--rule); stroke-width: 1; stroke-linejoin: round; }
+.face.top { fill: color-mix(in srgb, var(--card) 88%, var(--ink) 12%); }
+.face.left { fill: color-mix(in srgb, var(--card) 74%, var(--ink) 26%); }
+.face.right { fill: color-mix(in srgb, var(--card) 81%, var(--ink) 19%); }
+
+/* The one part that exists is the only part that carries the accent. */
+.face.top.on { fill: color-mix(in srgb, var(--acc) 78%, #ffffff 22%); stroke: var(--acc); }
+.face.left.on { fill: color-mix(in srgb, var(--acc) 55%, #000000 45%); stroke: var(--acc); }
+.face.right.on { fill: color-mix(in srgb, var(--acc) 66%, #000000 34%); stroke: var(--acc); }
+
+.iso-edge { stroke: var(--faint); stroke-width: 1.5; stroke-dasharray: 5 5; fill: none; opacity: 0.75; }
+.iso-loop { fill: color-mix(in srgb, var(--acc) 7%, transparent); stroke: none; }
+.iso-packet { fill: var(--acc); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--acc) 70%, transparent)); }
+
+.iso-title {
+  fill: var(--ink); font-size: 14px; font-weight: 700; text-anchor: middle;
+  letter-spacing: -0.01em; paint-order: stroke;
+  stroke: var(--card); stroke-width: 4px; stroke-linejoin: round;
+}
+.iso-sub {
+  fill: var(--dim); font-size: 11px; text-anchor: middle; paint-order: stroke;
+  stroke: var(--card); stroke-width: 3px; stroke-linejoin: round;
+}
+.iso-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-anchor: middle;
+  paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round;
+}
+.iso-badge.shipping { fill: var(--ok); }
+.iso-badge.planned { fill: var(--faint); }
+
+/* Narrow screens: the diagram is wide by nature, so let it scroll rather than
+   shrink the labels into illegibility. */
+@media (max-width: 760px) {
+  #iso { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .iso-svg { min-width: 660px; }
+}
