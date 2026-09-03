@@ -157,6 +157,7 @@ export type LaunchOptions = {
   skip: number[];
   overrides: [number, string][];
   /// Ids from `listAddableRoles`, in the order they were added.
+  /// `"coder"` uses the role default tool; `"coder:agy"` overrides it.
   extra: string[];
 };
 

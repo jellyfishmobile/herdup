@@ -69,8 +69,8 @@ briefing_trust = "manual"
 [opencode]
 display_name = "opencode"
 binary = "opencode"
+docs_url = "https://github.com/opencode-ai/opencode"
 kind = "opencode"
-docs_url = "https://github.com/anomalyco/opencode"
 flag_presets = [""]
 briefing_trust = "manual"
 
@@ -222,5 +222,19 @@ briefing_trust = "manual"
 display_name = "muse"
 binary = "muse"
 kind = "muse"
+flag_presets = [""]
+briefing_trust = "manual"
+
+[mimo]
+display_name = "MiMo Code"
+binary = "mimo"                                     # Xiaomi mimocode
+# No `kind`: herdr 0.8.2 has no mimo agent kind (probe: "unsupported
+# interactive agent kind: mimo"). It therefore runs as a plain command and can
+# never be briefed unattended — there is no readiness signal to gate on.
+docs_url = "https://github.com/XiaomiMiMo/MiMo"
+# No presets until someone has actually run mimo under herdup: an unverified
+# permission flag fails silently and could disable a sandbox (see config.rs).
+# Its --help documents `--dangerously-skip-permissions` (alias --yolo) and
+# `--trust`; add them in your own registry.toml if you want them.
 flag_presets = [""]
 briefing_trust = "manual"

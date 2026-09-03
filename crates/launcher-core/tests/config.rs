@@ -71,7 +71,11 @@ fn the_builtin_registry_covers_every_herdr_manifest_id() {
     for id in HERDR_MANIFEST_IDS {
         assert!(reg.contains(id), "registry is missing herdr agent '{id}'");
     }
-    assert_eq!(reg.len(), 24);
+    assert_eq!(
+        reg.len(),
+        25,
+        "a CLI was added or lost without updating this"
+    );
 }
 
 #[test]
@@ -318,7 +322,7 @@ fn a_user_can_add_a_cli_the_builtins_do_not_know() {
     assert_eq!(added.display_name, "My Tool");
     // An untested CLI defaults to the cautious tier.
     assert_eq!(added.briefing_trust, BriefingTrust::Manual);
-    assert_eq!(reg.len(), 25);
+    assert_eq!(reg.len(), Registry::builtin().len() + 1);
 }
 
 #[test]
@@ -594,7 +598,7 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
 fn a_missing_user_config_directory_falls_back_to_builtins() {
     // The normal first-run case must not be an error.
     let reg = launcher_core::config::load_registry_from(None).expect("loads");
-    assert_eq!(reg.len(), 24);
+    assert_eq!(reg.len(), Registry::builtin().len());
     let t = launcher_core::config::load_templates_from(None, &reg).expect("loads");
     assert_eq!(t.len(), 4);
 }
@@ -603,7 +607,7 @@ fn a_missing_user_config_directory_falls_back_to_builtins() {
 fn an_empty_config_directory_falls_back_to_builtins() {
     let dir = temp_dir("empty");
     let reg = launcher_core::config::load_registry_from(Some(&dir)).expect("loads");
-    assert_eq!(reg.len(), 24);
+    assert_eq!(reg.len(), Registry::builtin().len());
 }
 
 #[test]
@@ -622,7 +626,7 @@ fn user_files_on_disk_are_merged_and_validated_together() {
     .unwrap();
 
     let reg = launcher_core::config::load_registry_from(Some(&dir)).expect("registry loads");
-    assert_eq!(reg.len(), 25);
+    assert_eq!(reg.len(), Registry::builtin().len() + 1);
 
     // The user's template names the user's CLI: validation must see both.
     let t = launcher_core::config::load_templates_from(Some(&dir), &reg).expect("templates load");
