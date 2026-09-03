@@ -976,8 +976,12 @@ F=~/Library/Application\ Support/herdup/settings.toml
 cp "$F" "$S/settings.backup.toml" 2>/dev/null || : > "$S/settings.backup.toml"
 { printf 'update_endpoint = "http://127.0.0.1:8765/latest.json"\n'; cat "$S/settings.backup.toml"; } > "$F"
 python3 -c "import tomllib;d=tomllib.load(open('$F'.replace('~','$HOME'),'rb'));print('override at top level:', 'update_endpoint' in d)"
-open ~/Applications/herdup.app
+open --env HERDUP_SESSION=herdup-qa ~/Applications/herdup.app
 ```
+
+`HERDUP_SESSION=herdup-qa` keeps the test copy away from the user's own `herdup`
+herdr session; without it the test copy's preflight would act on their server.
+Use the same `open --env` form for every later launch in this task.
 
 - [ ] **Step 6: Observe the banner and install**
 
@@ -1001,10 +1005,10 @@ Click *Check for updates* (same osascript pattern, name `Check for updates`) and
 - [ ] **Step 7: Tamper**
 
 ```bash
-pkill -f 'Applications/herdup.app/Contents/MacOS/herdup-app'
+pkill -f "$HOME/Applications/herdup.app/Contents/MacOS/herdup-app"
 rm -rf ~/Applications/herdup.app && cp -R "$S/v0/herdup.app" ~/Applications/herdup.app
 printf '\x00' | dd of="$S/feed/herdup.app.tar.gz" bs=1 seek=100 count=1 conv=notrunc
-open ~/Applications/herdup.app
+open --env HERDUP_SESSION=herdup-qa ~/Applications/herdup.app
 ```
 
 Click *Install and restart*. Expected: the banner reads *the download did not verify; nothing was installed*, both buttons return, and the running app is still 0.1.0.
@@ -1020,7 +1024,7 @@ Restore the settings file from the backup (or delete the appended line), relaunc
 - [ ] **Step 10: Clean up and report**
 
 ```bash
-pkill -f 'Applications/herdup.app/Contents/MacOS/herdup-app'; kill %1   # the http.server
+pkill -f "$HOME/Applications/herdup.app/Contents/MacOS/herdup-app"; kill %1   # the http.server
 rm -rf ~/Applications/herdup.app
 ```
 
