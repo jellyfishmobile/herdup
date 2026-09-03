@@ -46,39 +46,39 @@ STYLE = (
 )
 
 STILL = (
-    "Wide panoramic isometric factory floor, one continuous scene read from "
-    "left to right, with clear empty white space separating each group. "
-    "FAR LEFT: five separate chutes angled in from different directions, each "
-    "pouring a stream of cardboard parcels of many different sizes and "
-    "rotations, tumbling and overlapping and crooked, piling up messily at the "
-    "start of the line — visibly disordered. "
-    "LEFT OF CENTRE: one large orange machine with two robotic arms reaching "
-    "down onto the belt, taking the jumbled parcels in on one side and putting "
-    "out identical uniform boxes on the other, one small worker figure beside it. "
-    "CENTRE AND RIGHT: three separate conveyor lines running parallel to each "
-    "other, one behind another, all running at the same time, each carrying "
-    "identical evenly spaced boxes past its own small machines and worker "
-    "figures. "
-    "FAR RIGHT: a raised desk where one single figure stands at a bank of "
-    "blank monitors, with tidy stacks of finished boxes beside it. "
-    "The change is obvious at a glance: random and piled on the left, uniform "
-    "and evenly spaced on the right. "
-    "Wide clear margin along the top of the image. " + STYLE + " "
+    "Wide panoramic isometric factory floor, one continuous scene read left to "
+    "right on a pure white floor. "
+    "FAR LEFT, VISIBLE DISORDER: cardboard parcels of wildly different sizes "
+    "raining down out of four separate chutes at once, caught mid-fall, "
+    "bouncing and tumbling, several boxes lying tipped over on their sides and "
+    "scattered loose across the floor at random angles, a lopsided leaning "
+    "heap spilling outward — obviously messy and out of control. "
+    "FROM THAT MESS: one single wide conveyor belt gathers it all up and "
+    "carries it toward the centre. "
+    "CENTRE, THE SORTER: one large orange machine straddling that belt with a "
+    "pusher arm, and FOUR narrower conveyor belts fanning outward from it "
+    "diagonally to the right at different angles, each one receiving neat "
+    "identical boxes being pushed onto it — the single messy stream visibly "
+    "splitting into four tidy streams. "
+    "RIGHT: the four belts run past small workstations with worker figures to "
+    "one raised desk with blank monitors where a single figure stands. "
+    "Unmistakable contrast: falling, scattered and random on the left; four "
+    "orderly evenly spaced streams on the right. "
+    "Wide clear margin along the top. " + STYLE + " "
     "--ar 16:9 --q 2 --s 160 --no text, letters, numbers, words, signage, labels, "
     "captions, writing, typography, watermark"
 )
 
 MOTION = (
-    "Everything runs at once and continuously. Messy parcels keep tumbling in "
-    "from the chutes on the left. The robotic arms of the central sorting "
-    "machine lower and lift in a steady precise rhythm, one parcel after "
-    "another. All three parallel conveyor lines run left to right at the same "
-    "time, carrying evenly spaced identical boxes. Small worker figures make "
-    "idle movements, machine indicator lights blink softly, the screens at the "
-    "right-hand desk flicker gently. Locked-off static camera, absolutely no "
-    "camera movement, no zoom, no pan. " + STYLE
+    "Fast, busy, continuous motion. Parcels rain down rapidly from the chutes "
+    "on the left and tumble onto the belt. The single inbound conveyor moves "
+    "briskly. The sorter's pusher arm works quickly, flicking each box onto one "
+    "of the four outgoing belts in rapid succession. All four belts run fast, "
+    "carrying evenly spaced boxes away to the right at a steady clip. Machine "
+    "lights blink, workers move. Energetic industrial rhythm, quick cadence, "
+    "everything moving at once. Locked-off static camera, absolutely no camera "
+    "movement, no zoom, no pan. " + STYLE
 )
-
 
 def load_env() -> dict:
     env = {}

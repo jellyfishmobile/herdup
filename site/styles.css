@@ -624,3 +624,30 @@ main section.direction { padding: 28px 24px 32px; }
   border-top: 1px solid var(--rule);
   text-wrap: balance;
 }
+
+
+/* The scrim exists to keep the sentence legible, not to erase the herd. On a
+   light ground the old strength washed the field out completely. */
+.story-scrim {
+  background: linear-gradient(
+    90deg,
+    var(--pa) 0%,
+    color-mix(in srgb, var(--pa) 86%, transparent) 22%,
+    color-mix(in srgb, var(--pa) 40%, transparent) 42%,
+    transparent 60%
+  );
+}
+@media (max-width: 860px) {
+  .story-scrim { background: color-mix(in srgb, var(--pa) 62%, transparent); }
+}
+
+
+/* The first beat, promoted out of the scroll canvas to sit under the hero. */
+.opening { max-width: 900px; margin: 0 auto; padding: 54px 24px; border-bottom: 1px solid var(--rule); }
+.opening-in { max-width: 52ch; }
+.opening .step {
+  display: inline-block; font-size: 11px; letter-spacing: 0.24em;
+  color: var(--acc); font-weight: 500; margin-bottom: 12px;
+}
+.opening h2 { font-size: clamp(24px, 3.2vw, 34px); margin-bottom: 12px; }
+.opening p { color: var(--dim); font-size: 16px; }

@@ -18,7 +18,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preload" as="image" href="/img/hero-factory.png?v=1" />
-    <link rel="stylesheet" href="/styles.css?v=23" />
+    <link rel="stylesheet" href="/styles.css?v=24" />
     <link rel="stylesheet" href="/stage.css?v=2" />
   </head>
   <body>
@@ -84,6 +84,21 @@
       <div class="scroll-cue" aria-hidden>Scroll</div>
     </section>
 
+    <!-- The line that explains the picture above it, so it sits directly
+         under the hero rather than behind a WebGL section. -->
+    <section class="opening">
+      <div class="opening-in rise">
+        <span class="step">01</span>
+        <h2>Four agents is not four times one.</h2>
+        <p>
+          Four terminals. Four sets of permission flags. The same &ldquo;do you trust this
+          folder?&rdquo; question, four times. Then you brief each one by hand and hope you said the
+          same thing twice. Most people give up before finding out whether a team beats a single
+          agent.
+        </p>
+      </div>
+    </section>
+
     <!-- ============================================================
          The story. One canvas persists for the whole section: the
          points scatter, gather, then resolve into the four lanes the
@@ -94,17 +109,6 @@
       <canvas id="field" aria-hidden></canvas>
       <div class="story-scrim" aria-hidden></div>
 
-      <div class="beat">
-        <div class="beat-in">
-          <span class="step">01</span>
-          <h2>Four agents is not four times one.</h2>
-          <p>
-            Four terminals. Four sets of permission flags. The same “do you trust this folder?”
-            question, four times. Then you brief each one by hand and hope you said the same thing
-            twice. Most people give up before finding out whether a team beats a single agent.
-          </p>
-        </div>
-      </div>
 
       <div class="beat">
         <div class="beat-in">

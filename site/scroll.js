@@ -80,9 +80,15 @@ function startField(canvas) {
   const positions = new Float32Array(COUNT * 3);
   positions.set(L.scatter);
 
+  // Colours come from the stylesheet, never hard-coded. They were hard-coded
+  // once, chosen against a dark page, and when the page went light the field
+  // became invisible — the section read as blank. Reading the tokens means the
+  // field is correct in both themes by construction.
+  const css = getComputedStyle(document.documentElement);
+  const token = (name, fallback) => (css.getPropertyValue(name).trim() || fallback);
   const colors = new Float32Array(COUNT * 3);
-  const amber = new THREE.Color("#d9903f");
-  const dim = new THREE.Color("#6c7180");
+  const amber = new THREE.Color(token("--acc", "#b8681e"));
+  const dim = new THREE.Color(token("--dim", "#55585d"));
   for (let i = 0; i < COUNT; i++) {
     const c = L.lead[i] ? amber : dim;
     colors[i * 3] = c.r;
@@ -95,7 +101,7 @@ function startField(canvas) {
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
   const material = new THREE.PointsMaterial({
-    size: 0.13,
+    size: 0.16,
     vertexColors: true,
     transparent: true,
     opacity: 0.9,
@@ -157,7 +163,8 @@ function startField(canvas) {
     // Settle the camera as order emerges: wide and tilted → square on.
     points.rotation.y = (1 - t) * 0.5 - 0.05;
     camera.position.z = 26 - t * 6;
-    material.opacity = 0.35 + t * 0.5;
+    // Never fully faint: on a light ground a low floor reads as nothing.
+    material.opacity = 0.55 + t * 0.4;
 
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
