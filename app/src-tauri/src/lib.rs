@@ -46,6 +46,8 @@ pub struct TemplateDto {
     id: String,
     display_name: String,
     description: String,
+    /// The team came from the project's own `.herdr/team.toml`.
+    from_repo: bool,
     panes: Vec<TemplatePaneDto>,
 }
 
@@ -195,6 +197,9 @@ pub struct ProjectStatusDto {
     versioned: bool,
     branch: Option<String>,
     uncommitted: usize,
+    /// The project has a `.herdr/team.toml` that failed to load: the message.
+    /// `None` when there is no file or it is valid.
+    team_file: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -275,12 +280,24 @@ fn build_plan_inner(
     options: &LaunchOptions,
     reserved: Vec<String>,
 ) -> Result<(LaunchPlan, Registry, Settings), String> {
-    let (registry, templates, settings) = load()?;
-    let template = templates
-        .get(&options.template)
-        .ok_or_else(|| format!("no template '{}'", options.template))?;
-
+    let (registry, _, settings) = load()?;
     let project = PathBuf::from(&options.project);
+    let (templates, repo_error) = launcher_core::config::load_templates_for(&project, &registry)
+        .map_err(|e| e.to_string())?;
+    let template = match templates.get(&options.template) {
+        Some(t) => t,
+        None if options.template == launcher_core::template::REPO_TEMPLATE_ID => {
+            return Err(match repo_error {
+                Some(e) => e.to_string(),
+                None => format!(
+                    "no {} in {}",
+                    launcher_core::template::REPO_TEAM_FILE,
+                    project.display()
+                ),
+            })
+        }
+        None => return Err(format!("no template '{}'", options.template)),
+    };
     let mut request = LaunchRequest::new(&project, template).reserving(reserved);
     for index in &options.skip {
         request = request.skip_pane(*index);
@@ -322,27 +339,40 @@ fn build_plan_inner(
 // commands
 // ---------------------------------------------------------------------------
 
+fn template_dto(t: &launcher_core::template::Template) -> TemplateDto {
+    TemplateDto {
+        id: t.id.clone(),
+        display_name: t.display_name.clone(),
+        description: t.description.clone(),
+        from_repo: t.id == launcher_core::template::REPO_TEMPLATE_ID,
+        panes: t
+            .panes
+            .iter()
+            .map(|p| TemplatePaneDto {
+                role: p.role.clone(),
+                cli: p.cli.clone(),
+                flags: p.flags.clone(),
+                coordinator: p.coordinator,
+            })
+            .collect(),
+    }
+}
+
+/// Built-in and user templates, plus the project's own team when `project`
+/// is given and has a valid one. A bad team file is not an error here; it is
+/// reported by [`project_status`] so the list still renders.
 #[tauri::command]
-fn list_templates() -> Result<Vec<TemplateDto>, String> {
-    let (_, templates, _) = load()?;
-    Ok(templates
-        .iter()
-        .map(|t| TemplateDto {
-            id: t.id.clone(),
-            display_name: t.display_name.clone(),
-            description: t.description.clone(),
-            panes: t
-                .panes
-                .iter()
-                .map(|p| TemplatePaneDto {
-                    role: p.role.clone(),
-                    cli: p.cli.clone(),
-                    flags: p.flags.clone(),
-                    coordinator: p.coordinator,
-                })
-                .collect(),
-        })
-        .collect())
+fn list_templates(project: Option<String>) -> Result<Vec<TemplateDto>, String> {
+    let registry = launcher_core::config::load_registry().map_err(|e| e.to_string())?;
+    let templates = match project.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        Some(project) => {
+            launcher_core::config::load_templates_for(std::path::Path::new(project), &registry)
+                .map_err(|e| e.to_string())?
+                .0
+        }
+        None => launcher_core::config::load_templates(&registry).map_err(|e| e.to_string())?,
+    };
+    Ok(templates.iter().map(template_dto).collect())
 }
 
 /// Cheap, read-only look at a folder, for the moment a project is chosen.
@@ -356,6 +386,14 @@ async fn project_status(project: String) -> Result<ProjectStatusDto, String> {
         let path = PathBuf::from(&project);
         let exists = path.is_dir();
         let git = launcher_core::preflight::git_status(&path);
+        let team_file = launcher_core::config::load_registry()
+            .ok()
+            .and_then(
+                |registry| match launcher_core::template::load_repo_team(&path, &registry) {
+                    Some(Err(e)) => Some(e.to_string()),
+                    _ => None,
+                },
+            );
         ProjectStatusDto {
             exists,
             name: path
@@ -365,6 +403,7 @@ async fn project_status(project: String) -> Result<ProjectStatusDto, String> {
             versioned: git.is_repo,
             branch: git.branch,
             uncommitted: git.dirty_files,
+            team_file,
         }
     })
     .await
