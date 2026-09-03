@@ -948,6 +948,13 @@ pub struct UpdateProgressDto {
     installing: bool,
 }
 
+/// The version baked into this build, for the top bar. Read from the app
+/// itself rather than the frontend bundle so the two can never disagree.
+#[tauri::command]
+fn app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
 /// One short sentence per plugin failure. The manual check shows these; the
 /// startup check drops them.
 ///
@@ -1098,6 +1105,7 @@ pub fn run() {
             attach_workspace,
             open_terminal,
             default_projects_root,
+            app_version,
             check_for_update,
             install_update,
         ])

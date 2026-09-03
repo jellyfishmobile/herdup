@@ -102,6 +102,11 @@ export default function App() {
   const [updateNote, setUpdateNote] = useState<UpdateNote>({ kind: "idle" });
   const [updateDismissed, setUpdateDismissed] = useState(false);
 
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    api.appVersion().then(setVersion).catch(() => setVersion(null));
+  }, []);
+
   useEffect(() => {
     const t = window.setTimeout(() => {
       api
@@ -255,7 +260,14 @@ export default function App() {
   return (
     <div className="app">
       <div className="topbar">
-        <span className="mark">herdup</span>
+        <span className="brand">
+          <span className="mark">herdup</span>
+          {version && (
+            <span className="version" data-testid="app-version">
+              v{version}
+            </span>
+          )}
+        </span>
         <span className="topbar-right">
           <button
             className="linkbtn"

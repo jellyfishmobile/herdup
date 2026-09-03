@@ -210,6 +210,7 @@ export const api = {
     invoke<string>("attach_workspace", { workspaceId, path }),
   defaultProjectsRoot: () => invoke<string | null>("default_projects_root"),
   onProgress: (fn: (p: Progress) => void) => listen<Progress>("launch-progress", (e) => fn(e.payload)),
+  appVersion: () => invoke<string>("app_version"),
   checkForUpdate: () => invoke<UpdateCheck>("check_for_update"),
   installUpdate: () => invoke<void>("install_update"),
   onUpdateProgress: (fn: (p: UpdateProgress) => void) =>
