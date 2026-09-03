@@ -196,16 +196,24 @@
 
         figure(g, sx + ox * 0.42, sy + oy * 0.42);
 
-        const top = iso(mx, my, topH);
-        const lift = H / 2 + 22;
-        const badge = el("text", { class: "iso-badge " + st.state, x: top.px, y: top.py - lift - 30 });
+        // "Above the machine" points back into the circuit for near-side
+        // stations, so their labels landed on the belt. Near side reads below
+        // the machine instead.
+        const near = oy > 0;
+        const anchor = iso(mx, my, near ? 0 : topH);
+        const lift = H / 2 + 20;
+        const yBadge = near ? anchor.py + lift + 30 : anchor.py - lift - 30;
+        const yTitle = near ? anchor.py + lift + 46 : anchor.py - lift - 14;
+        const ySub = near ? anchor.py + lift + 61 : anchor.py - lift + 1;
+
+        const badge = el("text", { class: "iso-badge " + st.state, x: anchor.px, y: yBadge });
         badge.textContent = st.state === "shipping" ? "SHIPPING" : "PLANNED";
         g.appendChild(badge);
-        const t = el("text", { class: "iso-title", x: top.px, y: top.py - lift - 14 });
+        const t = el("text", { class: "iso-title", x: anchor.px, y: yTitle });
         t.textContent = st.title;
         g.appendChild(t);
         st.sub.split("\n").forEach((line, i) => {
-          const s = el("text", { class: "iso-sub", x: top.px, y: top.py - lift + 1 + i * 12 });
+          const s = el("text", { class: "iso-sub", x: anchor.px, y: ySub + i * 12 });
           s.textContent = line;
           g.appendChild(s);
         });
@@ -259,10 +267,10 @@
       box(c.g, p.x + jitter, p.y + jitter, BELT_H + bob, size, ordered ? "ord" : "raw");
     };
 
-    if (reduced) {
-      cargo.forEach((c) => draw(c, 0));
-      return;
-    }
+    // Paint once up front: the diagram must never render as an empty belt
+    // while waiting for the first animation frame.
+    cargo.forEach((c) => draw(c, 0));
+    if (reduced) return;
 
     let running = false, raf = 0, last = performance.now();
     const frame = (now) => {
