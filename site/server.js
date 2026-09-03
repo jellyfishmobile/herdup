@@ -41,12 +41,18 @@ const server = createServer(async (req, res) => {
 
     // HTML, CSS and JS revalidate every time. They are a few KB, and the
     // alternative is a deploy leaving returning visitors on new markup with an
-    // hour-old stylesheet. Media is immutable in practice and gets a long TTL.
+    // hour-old stylesheet.
+    //
+    // Media is NOT treated as immutable. That assumption already bit once: the
+    // screenshots were replaced at the same URLs and a 24h TTL kept serving the
+    // old ones long after the deploy. Image URLs carry a ?v= token for an
+    // immediate bust, and this shorter TTL means any future slip self-heals in
+    // minutes rather than a day.
     const revalidate = ext === ".html" || ext === ".css" || ext === ".js";
 
     res.writeHead(200, {
       "content-type": TYPES[ext] ?? "application/octet-stream",
-      "cache-control": revalidate ? "no-cache" : "public, max-age=86400",
+      "cache-control": revalidate ? "no-cache" : "public, max-age=600, must-revalidate",
       "x-content-type-options": "nosniff",
       "referrer-policy": "strict-origin-when-cross-origin",
     });
