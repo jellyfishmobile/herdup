@@ -167,6 +167,13 @@ export type LaunchOptions = {
 
 export type CreatedRepo = { url: string | null; path: string };
 
+/// Result of writing the launched team into the project.
+export type SaveTeam = {
+  /// False when the file exists and the caller did not ask to replace it.
+  written: boolean;
+  path: string;
+};
+
 /// A newer herdup found on the release feed.
 export type UpdateInfo = {
   version: string;
@@ -211,6 +218,7 @@ export const api = {
   finishFirstRun: () => invoke<void>("finish_first_run"),
   launch: (options: LaunchOptions) => invoke<Outcome>("launch", { options }),
   sendBriefingNow: (index: number) => invoke<Outcome>("send_briefing_now", { index }),
+  saveTeamFile: (overwrite: boolean) => invoke<SaveTeam>("save_team_file", { overwrite }),
   openTerminal: (project: string) => invoke<string>("open_terminal", { project }),
   attachWorkspace: (workspaceId: string, path: string | null) =>
     invoke<string>("attach_workspace", { workspaceId, path }),

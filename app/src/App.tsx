@@ -1289,6 +1289,30 @@ function DoneStep(props: {
       .then(props.setOutcome)
       .catch((e) => props.setError(String(e)));
 
+  // Saving the team into the project: offer, then ask before replacing an
+  // existing file, then say where it went.
+  const [saved, setSaved] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const save = (overwrite: boolean) => {
+    setSaveError(null);
+    api
+      .saveTeamFile(overwrite)
+      .then((r) => {
+        if (r.written) {
+          setSaved(r.path);
+          setConfirming(false);
+        } else {
+          setConfirming(true);
+        }
+      })
+      .catch((e) => {
+        setSaveError(String(e));
+        setConfirming(false);
+      });
+  };
+
   const needing = o.panes.filter((p) => p.state === "needs_attention" || p.has_pending_briefing);
 
   return (
@@ -1340,6 +1364,39 @@ function DoneStep(props: {
         Open the team
         <span aria-hidden>→</span>
       </button>
+
+      {saved ? (
+        <p className="state ok" data-testid="team-saved">
+          Saved to {saved} — commit it and this team comes back with the project.
+        </p>
+      ) : confirming ? (
+        <div className="warnbox" data-testid="team-save-confirm">
+          <span className="ic">!</span>
+          <div>
+            <strong>.herdr/team.toml already exists</strong>
+            <p>Replace it with the team that just launched?</p>
+            <div className="acts">
+              <button className="btn solid" onClick={() => save(true)} data-testid="team-save-replace">
+                Replace
+              </button>
+              <button className="btn quiet" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="actions" style={{ justifyContent: "center" }}>
+          <button className="btn" onClick={() => save(false)} data-testid="team-save">
+            Save this team to the project
+          </button>
+        </div>
+      )}
+      {saveError && (
+        <p className="state warn" data-testid="team-save-error">
+          {saveError}
+        </p>
+      )}
 
       {/* This team keeps running. Several projects can go at once. */}
       <div className="actions" style={{ justifyContent: "center" }}>
