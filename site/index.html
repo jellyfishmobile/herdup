@@ -17,7 +17,7 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preload" as="image" href="/img/hero-factory.png?v=2" />
+    <link rel="preload" as="image" href="/img/hero-factory.png?v=3" />
     <link rel="stylesheet" href="/styles.css?v=24" />
     <link rel="stylesheet" href="/stage.css?v=3" />
   </head>
@@ -39,9 +39,9 @@
          ============================================================ -->
     <section class="hero" id="top">
       <div class="hero-media">
-        <img src="/img/hero-factory.png?v=2" alt="" />
+        <img src="/img/hero-factory.png?v=3" alt="" />
         <video id="hero-video" muted loop playsinline preload="none"
-               poster="/img/hero-factory.png?v=2" aria-hidden="true"></video>
+               poster="/img/hero-factory.png?v=3" aria-hidden="true"></video>
 
         <!-- The return leg. The model draws the factory; this draws the one
              relationship it cannot be trusted with — that the summary goes
@@ -657,10 +657,10 @@
       (function () {
         var v = document.getElementById("hero-video");
         if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        fetch("/img/hero-factory.mp4", { method: "HEAD" })
+        fetch("/img/hero-factory.mp4?v=2", { method: "HEAD" })
           .then(function (r) {
             if (!r.ok) return;
-            v.src = "/img/hero-factory.mp4";
+            v.src = "/img/hero-factory.mp4?v=2";
             v.addEventListener("canplay", function () {
               v.classList.add("ready");
               if (window.ScrollTrigger) window.ScrollTrigger.refresh();

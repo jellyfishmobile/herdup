@@ -21,3 +21,7 @@ assets/app/
 .env
 .env.*
 !.env.example
+
+# python bytecode
+__pycache__/
+*.pyc
