@@ -9,11 +9,11 @@ and already knows what its job is.
 
 ## Install
 
-**Windows.** Download `herdup_0.1.0_x64_en-US.msi` and run it. The installer is
+**Windows.** Download `herdup_0.1.1_x64_en-US.msi` and run it. The installer is
 unsigned, so SmartScreen will warn — "More info" → "Run anyway", or build from
 source below.
 
-**macOS.** Download `herdup_0.1.0_aarch64.dmg` (Apple silicon) and drag herdup
+**macOS.** Download `herdup_0.1.1_aarch64.dmg` (Apple silicon) and drag herdup
 into Applications. The app is unsigned and not notarized, so macOS will refuse
 to open a downloaded copy the first time — allow it under System Settings →
 Privacy & Security → "Open Anyway", or build from source below.
