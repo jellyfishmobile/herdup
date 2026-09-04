@@ -449,33 +449,62 @@
           flags, and whether it can be briefed unattended.
         </p>
 
-        <ul class="toolwall">
-          <li class="tool auto" title="briefed automatically">Claude Code</li>
-          <li class="tool plain" title="held for you">Codex</li>
-          <li class="tool plain" title="held for you">Droid</li>
-          <li class="tool plain" title="held for you">Amp</li>
-          <li class="tool plain" title="held for you">opencode</li>
-          <li class="tool plain" title="held for you">Cursor Agent</li>
-          <li class="tool plain" title="held for you">GitHub Copilot CLI</li>
-          <li class="tool plain" title="held for you">Gemini CLI</li>
-          <li class="tool plain" title="held for you">Kimi Code CLI</li>
-          <li class="tool presets" title="ships verified presets">Hermes Agent</li>
-          <li class="tool plain" title="held for you">Kilo Code CLI</li>
-          <li class="tool plain" title="held for you">Grok CLI</li>
-          <li class="tool plain" title="held for you">Devin CLI</li>
-          <li class="tool plain" title="held for you">pi</li>
-          <li class="tool plain" title="held for you">Qoder CLI</li>
-          <li class="tool plain" title="held for you">Kiro CLI</li>
-          <li class="tool plain" title="held for you">Cline</li>
-          <li class="tool nokind" title="no agent kind">Antigravity CLI</li>
-          <li class="tool presets" title="ships verified presets">agy</li>
-          <li class="tool plain" title="held for you">omp</li>
-          <li class="tool plain" title="held for you">Mastra Code</li>
-          <li class="tool plain" title="held for you">Qwen Code</li>
-          <li class="tool plain" title="held for you">maki</li>
-          <li class="tool plain" title="held for you">muse</li>
-          <li class="tool nokind" title="no agent kind">MiMo Code</li>
-        </ul>
+        <div class="toolwall" id="toolwall" role="radiogroup" aria-label="Choose a tool">
+          <button type="button" class="tool auto" role="radio" aria-checked="true" tabindex="0" data-tool="claude" title="briefed automatically">Claude Code<span class="pick" aria-hidden="true">&#10003;</span></button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="codex" title="held for you">Codex</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="droid" title="held for you">Droid</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="amp" title="held for you">Amp</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="opencode" title="held for you">opencode</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="cursor" title="held for you">Cursor Agent</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="github-copilot" title="held for you">GitHub Copilot CLI</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="gemini" title="held for you">Gemini CLI</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="kimi" title="held for you">Kimi Code CLI</button>
+          <button type="button" class="tool presets" role="radio" aria-checked="false" tabindex="-1" data-tool="hermes" title="ships verified presets">Hermes Agent</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="kilo" title="held for you">Kilo Code CLI</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="grok" title="held for you">Grok CLI</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="devin" title="held for you">Devin CLI</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="pi" title="held for you">pi</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="qodercli" title="held for you">Qoder CLI</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="kiro" title="held for you">Kiro CLI</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="cline" title="held for you">Cline</button>
+          <button type="button" class="tool nokind" role="radio" aria-checked="false" tabindex="-1" data-tool="antigravity" title="no agent kind">Antigravity CLI</button>
+          <button type="button" class="tool presets" role="radio" aria-checked="false" tabindex="-1" data-tool="agy" title="ships verified presets">agy</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="omp" title="held for you">omp</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="mastracode" title="held for you">Mastra Code</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="qwen" title="held for you">Qwen Code</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="maki" title="held for you">maki</button>
+          <button type="button" class="tool plain" role="radio" aria-checked="false" tabindex="-1" data-tool="muse" title="held for you">muse</button>
+          <button type="button" class="tool nokind" role="radio" aria-checked="false" tabindex="-1" data-tool="mimo" title="no agent kind">MiMo Code</button>
+        </div>
+
+
+        <div class="toolpanel" id="toolpanel" aria-live="polite">
+          <h3 class="tp-name">Claude Code</h3>
+
+          <p class="tp-line">
+            <span class="tp-label">herdup runs</span>
+            <code class="tp-cmd">claude --permission-mode bypassPermissions</code>
+          </p>
+
+          <p class="tp-line">
+            <span class="tp-label">Briefing</span>
+            <span class="tp-state auto"><b>Briefed automatically</b> — Its blocked state was verified by hand.</span>
+          </p>
+
+          <div class="tp-line tp-presets">
+            <span class="tp-label">Verified presets</span>
+            <div class="tp-flags" id="tp-flags" role="radiogroup" aria-label="Permission preset">
+              <button type="button" class="tp-flag" role="radio" aria-checked="true" tabindex="0" data-flag="0">--permission-mode bypassPermissions</button>
+              <button type="button" class="tp-flag" role="radio" aria-checked="false" tabindex="-1" data-flag="1">--permission-mode acceptEdits</button>
+              <button type="button" class="tp-flag" role="radio" aria-checked="false" tabindex="-1" data-flag="2">no flags — the default</button>
+            </div>
+          </div>
+
+          <p class="tp-line">
+            <span class="tp-label">herdr agent kind</span>
+            <code class="tp-kind">claude</code>
+          </p>
+        </div>
 
         <ul class="toolwall-key">
           <li class="auto">
@@ -962,6 +991,141 @@
         { threshold: 0.25 },
       );
       document.querySelectorAll(".stage").forEach((el) => io.observe(el));
+    </script>
+
+    <script type="application/json" id="tools-data">[{"id":"claude","name":"Claude Code","binary":"claude","kind":"claude","presets":["--permission-mode bypassPermissions","--permission-mode acceptEdits"],"state":"auto"},{"id":"codex","name":"Codex","binary":"codex","kind":"codex","presets":[],"state":"held"},{"id":"droid","name":"Droid","binary":"droid","kind":"droid","presets":[],"state":"held"},{"id":"amp","name":"Amp","binary":"amp","kind":"amp","presets":[],"state":"held"},{"id":"opencode","name":"opencode","binary":"opencode","kind":"opencode","presets":[],"state":"held"},{"id":"cursor","name":"Cursor Agent","binary":"cursor-agent","kind":"cursor","presets":[],"state":"held"},{"id":"github-copilot","name":"GitHub Copilot CLI","binary":"copilot","kind":"copilot","presets":[],"state":"held"},{"id":"gemini","name":"Gemini CLI","binary":"gemini","kind":"gemini","presets":[],"state":"held"},{"id":"kimi","name":"Kimi Code CLI","binary":"kimi","kind":"kimi","presets":[],"state":"held"},{"id":"hermes","name":"Hermes Agent","binary":"hermes","kind":"hermes","presets":["--yolo"],"state":"presets"},{"id":"kilo","name":"Kilo Code CLI","binary":"kilo","kind":"kilo","presets":[],"state":"held"},{"id":"grok","name":"Grok CLI","binary":"grok","kind":"grok","presets":[],"state":"held"},{"id":"devin","name":"Devin CLI","binary":"devin","kind":"devin","presets":[],"state":"held"},{"id":"pi","name":"pi","binary":"pi","kind":"pi","presets":[],"state":"held"},{"id":"qodercli","name":"Qoder CLI","binary":"qodercli","kind":"qodercli","presets":[],"state":"held"},{"id":"kiro","name":"Kiro CLI","binary":"kiro","kind":"kiro","presets":[],"state":"held"},{"id":"cline","name":"Cline","binary":"cline","kind":"cline","presets":[],"state":"held"},{"id":"antigravity","name":"Antigravity CLI","binary":"antigravity","kind":null,"presets":[],"state":"nokind"},{"id":"agy","name":"agy","binary":"agy","kind":"agy","presets":["--dangerously-skip-permissions"],"state":"presets"},{"id":"omp","name":"omp","binary":"omp","kind":"omp","presets":[],"state":"held"},{"id":"mastracode","name":"Mastra Code","binary":"mastracode","kind":"mastracode","presets":[],"state":"held"},{"id":"qwen","name":"Qwen Code","binary":"qwen","kind":"qwen","presets":[],"state":"held"},{"id":"maki","name":"maki","binary":"maki","kind":"maki","presets":[],"state":"held"},{"id":"muse","name":"muse","binary":"muse","kind":"muse","presets":[],"state":"held"},{"id":"mimo","name":"MiMo Code","binary":"mimo","kind":null,"presets":[],"state":"nokind"}]</script>
+    <script>
+      // The tool wall is a picker. Everything below is read from the registry
+      // data above; nothing here derives a flag, a kind or a claim.
+      (function () {
+        const data = JSON.parse(document.getElementById("tools-data").textContent);
+        const byId = Object.fromEntries(data.map((t) => [t.id, t]));
+        const wall = document.getElementById("toolwall");
+        const panel = document.getElementById("toolpanel");
+        if (!wall || !panel) return;
+
+        // The registry's state names, and what herdup does about each.
+        const CLS = { auto: "auto", presets: "presets", held: "plain", nokind: "nokind" };
+        const REASON = {
+          auto: ["Briefed automatically", "Its blocked state was verified by hand."],
+          presets: ["Held for you", "It ships verified permission flags you can pick, but it still waits for you."],
+          plain: ["Held for you", "Fully supported and started for you; the briefing waits behind a button."],
+          nokind: ["Held for you", "herdr has no agent kind for it, so there is no readiness signal and it is never auto-briefed."],
+        };
+        // launcher_core::template::command_line: the binary alone when the
+        // preset is empty, otherwise the binary and the preset, single-spaced.
+        const commandLine = (binary, flags) =>
+          flags.trim() === "" ? binary : binary + " " + flags.trim();
+
+        const q = (sel) => panel.querySelector(sel);
+        const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        let tool = byId.claude;
+        let flagIndex = 0;
+        const options = (t) => t.presets.concat([""]);
+
+        function paintFlags() {
+          const box = q("#tp-flags");
+          box.textContent = "";
+          options(tool).forEach((f, i) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "tp-flag";
+            b.setAttribute("role", "radio");
+            b.setAttribute("aria-checked", String(i === flagIndex));
+            b.tabIndex = i === flagIndex ? 0 : -1;
+            b.dataset.flag = String(i);
+            b.textContent = f || "no flags — the default";
+            // A space between them, exactly as the server-rendered markup has:
+            // appended siblings would otherwise touch with no gap.
+            if (i) box.appendChild(document.createTextNode(" "));
+            box.appendChild(b);
+          });
+          // One option is no choice at all, so the list only earns its place
+          // when the tool actually ships a preset.
+          q(".tp-presets").hidden = tool.presets.length === 0;
+        }
+
+        function paint(fade) {
+          const cls = CLS[tool.state];
+          const [head, why] = REASON[cls];
+          q(".tp-name").textContent = tool.name;
+          q(".tp-cmd").textContent = commandLine(tool.binary, options(tool)[flagIndex] || "");
+          const st = q(".tp-state");
+          st.className = "tp-state " + cls;
+          st.textContent = "";
+          const b = document.createElement("b");
+          b.textContent = head;
+          st.append(b, " — " + why);
+          q(".tp-kind").textContent = tool.kind || "no agent kind";
+          if (fade && !calm) {
+            panel.style.transition = "none";
+            panel.style.opacity = "0.35";
+            requestAnimationFrame(() => {
+              panel.style.transition = "opacity 160ms ease-out";
+              panel.style.opacity = "1";
+            });
+          }
+        }
+
+        function select(id) {
+          const next = byId[id];
+          if (!next || next === tool) return;
+          tool = next;
+          flagIndex = 0;
+          wall.querySelectorAll(".tool").forEach((chip) => {
+            const on = chip.dataset.tool === id;
+            chip.setAttribute("aria-checked", String(on));
+            chip.tabIndex = on ? 0 : -1;
+            const mark = chip.querySelector(".pick");
+            if (on && !mark) {
+              const m = document.createElement("span");
+              m.className = "pick";
+              m.setAttribute("aria-hidden", "true");
+              m.textContent = "✓";
+              chip.appendChild(m);
+            } else if (!on && mark) {
+              mark.remove();
+            }
+          });
+          paintFlags();
+          paint(true);
+        }
+
+        wall.addEventListener("click", (e) => {
+          const chip = e.target.closest(".tool");
+          if (chip) select(chip.dataset.tool);
+        });
+        panel.addEventListener("click", (e) => {
+          const f = e.target.closest(".tp-flag");
+          if (!f) return;
+          flagIndex = Number(f.dataset.flag);
+          paintFlags();
+          paint(false);
+          const again = q('.tp-flag[aria-checked="true"]');
+          if (again) again.focus();
+        });
+
+        // Arrow keys move focus inside either radiogroup; Enter or Space
+        // selects, which a real button already does for us.
+        function roving(group, itemSel) {
+          group.addEventListener("keydown", (e) => {
+            const items = Array.from(group.querySelectorAll(itemSel));
+            const at = items.indexOf(document.activeElement);
+            if (at < 0) return;
+            const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+            let to = null;
+            if (e.key in step) to = (at + step[e.key] + items.length) % items.length;
+            else if (e.key === "Home") to = 0;
+            else if (e.key === "End") to = items.length - 1;
+            if (to === null) return;
+            e.preventDefault();
+            items.forEach((it, i) => (it.tabIndex = i === to ? 0 : -1));
+            items[to].focus();
+          });
+        }
+        roving(wall, ".tool");
+        roving(panel, ".tp-flag");
+      })();
     </script>
   </body>
 </html>
