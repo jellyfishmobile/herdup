@@ -17,6 +17,59 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      .toolwall { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; padding: 0; list-style: none; }
+      .tool {
+        position: relative; border: 1px solid #22242a; padding: 8px 12px 8px 26px; font-size: 12.5px;
+      }
+      .tool::before {
+        content: ""; position: absolute; left: 11px; top: 50%; margin-top: -3px;
+        width: 6px; height: 6px; border-radius: 50%; background: #8a8d93;
+      }
+      .tool.auto::before { background: #1e9bf0; }
+      .tool.presets::before { background: #f5e63d; }
+      .tool.nokind { border-style: dashed; }
+      .tool.nokind::before { background: none; border: 1px solid #8a8d93; }
+      .toolwall-key {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 30px;
+        margin: 0 0 22px; padding: 0; list-style: none;
+      }
+      .toolwall-key li { position: relative; padding-left: 26px; font-size: 12.5px; line-height: 1.5; }
+      .toolwall-key li::before {
+        content: ""; position: absolute; left: 3px; top: 7px;
+        width: 6px; height: 6px; border-radius: 50%; background: #8a8d93;
+      }
+      .toolwall-key .auto::before { background: #1e9bf0; }
+      .toolwall-key .presets::before { background: #f5e63d; }
+      .toolwall-key .nokind::before { background: none; border: 1px solid #8a8d93; }
+      .toolwall-key b { display: block; margin-bottom: 3px; }
+
+      .shapes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; margin: 0 0 26px; }
+      .shape h3 { margin: 0; font-size: 14px; }
+      .shape p { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; }
+      .shape .lineup { font-size: 11.5px; opacity: 0.72; }
+      .panes { display: grid; gap: 5px; margin: 12px 0 10px; }
+      .panes[data-panes="1"] { grid-template-columns: 1fr; }
+      .panes[data-panes="2"], .panes[data-panes="4"] { grid-template-columns: repeat(2, 1fr); }
+      .panes[data-panes="6"] { grid-template-columns: repeat(3, 1fr); }
+      .panes i { display: block; height: 24px; border: 1px solid #0e5c93; }
+      .panes i.lead { background: #1e9bf0; border-color: #1e9bf0; }
+      .roles {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 10px; margin: 0 0 18px; padding: 0; list-style: none;
+      }
+      .roles li { border: 1px solid #22242a; padding: 10px 12px; }
+      .roles b { display: block; font-size: 12.5px; }
+      .roles span { display: block; margin-top: 4px; font-size: 12px; opacity: 0.72; }
+
+      .matrix { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 44px; }
+      .matrix-group h3 { margin: 0; font-size: 14px; }
+      .matrix-group ul { margin: 10px 0 0; padding-left: 18px; }
+      .matrix-group li { margin-bottom: 8px; font-size: 13.5px; line-height: 1.55; }
+      @media (max-width: 900px) {
+        .shapes, .matrix, .toolwall-key { grid-template-columns: 1fr; }
+      }
+    </style>
     <link rel="stylesheet" href="/styles.css?v=25" />
 
     <!-- ============================================================
@@ -470,6 +523,20 @@
         font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
       }
 
+      /* ── the team shapes: each assembles its own panes ────── */
+      .shapes.stage .panes i { animation: paneIn 4.6s var(--ease) infinite; }
+      .panes i:nth-child(2) { animation-delay: 0.16s; }
+      .panes i:nth-child(3) { animation-delay: 0.32s; }
+      .panes i:nth-child(4) { animation-delay: 0.48s; }
+      .panes i:nth-child(5) { animation-delay: 0.64s; }
+      .panes i:nth-child(6) { animation-delay: 0.8s; }
+      @keyframes paneIn {
+        0%, 4% { opacity: 0; transform: translateY(5px); }
+        14% { opacity: 1; transform: none; }
+        90% { opacity: 1; transform: none; }
+        100% { opacity: 0; }
+      }
+
       /* Motion is the explanation, so when it is unwelcome the diagram
          has to still say the thing. Every loop settles on its finished
          frame instead of running. */
@@ -499,7 +566,7 @@
       <nav>
         <a href="#argument">The argument</a>
         <a href="#roadmap">Roadmap</a>
-        <a href="#supported">Supported tools</a>
+        <a href="#tools">Supported tools</a>
         <a href="#download">Download</a>
         <a href="https://github.com/jellyfishmobile/herdup">GitHub</a>
       </nav>
@@ -562,7 +629,7 @@
           <div class="stats">
             <div class="stat"><b>75.5 s</b><span>six agents, briefed</span></div>
             <div class="stat"><b>217</b><span>tests behind it</span></div>
-            <div class="stat"><b>24</b><span>tools it can start</span></div>
+            <div class="stat"><b>25</b><span>tools it can start</span></div>
             <div class="stat"><b>1</b><span>briefed automatically — the rest wait for you</span></div>
           </div>
         </div>
@@ -905,25 +972,201 @@
     </section>
 
     <main>
-      <section id="objective">
+      <!-- ============================================================
+           Every tool herdup can start, and the honest four states.
+           The count and each state's tally come from the registry;
+           the key is on the page because a colour alone would imply
+           they are all equally automatic. They are not.
+           ============================================================ -->
+      <section id="tools">
+        <h2 class="rise">Twenty-five tools. One way to start them.</h2>
+        <p class="sub rise">
+          Any of these can fill any role on a team. herdup knows each one’s command, its permission
+          flags, and whether it can be briefed unattended.
+        </p>
+
+        <ul class="toolwall rise">
+          <li class="tool auto" title="briefed automatically">Claude Code</li>
+          <li class="tool plain" title="held for you">Codex</li>
+          <li class="tool plain" title="held for you">Droid</li>
+          <li class="tool plain" title="held for you">Amp</li>
+          <li class="tool plain" title="held for you">opencode</li>
+          <li class="tool plain" title="held for you">Cursor Agent</li>
+          <li class="tool plain" title="held for you">GitHub Copilot CLI</li>
+          <li class="tool plain" title="held for you">Gemini CLI</li>
+          <li class="tool plain" title="held for you">Kimi Code CLI</li>
+          <li class="tool presets" title="ships verified presets">Hermes Agent</li>
+          <li class="tool plain" title="held for you">Kilo Code CLI</li>
+          <li class="tool plain" title="held for you">Grok CLI</li>
+          <li class="tool plain" title="held for you">Devin CLI</li>
+          <li class="tool plain" title="held for you">pi</li>
+          <li class="tool plain" title="held for you">Qoder CLI</li>
+          <li class="tool plain" title="held for you">Kiro CLI</li>
+          <li class="tool plain" title="held for you">Cline</li>
+          <li class="tool nokind" title="no agent kind">Antigravity CLI</li>
+          <li class="tool presets" title="ships verified presets">agy</li>
+          <li class="tool plain" title="held for you">omp</li>
+          <li class="tool plain" title="held for you">Mastra Code</li>
+          <li class="tool plain" title="held for you">Qwen Code</li>
+          <li class="tool plain" title="held for you">maki</li>
+          <li class="tool plain" title="held for you">muse</li>
+          <li class="tool nokind" title="no agent kind">MiMo Code</li>
+        </ul>
+
+        <ul class="toolwall-key rise">
+          <li class="auto">
+            <b>Briefed automatically</b>
+            <span>Its blocked state was verified by hand. Exactly one: Claude Code.</span>
+          </li>
+          <li class="presets">
+            <b>Ships verified presets</b>
+            <span>
+              Permission flags you can pick, but it still waits for you before it is briefed. Two:
+              Hermes Agent, agy.
+            </span>
+          </li>
+          <li class="plain">
+            <b>Held for you</b>
+            <span>
+              Fully supported and started for you; the briefing waits behind a button until you look
+              at the pane. Twenty.
+            </span>
+          </li>
+          <li class="nokind">
+            <b>No agent kind</b>
+            <span>
+              herdr has no agent kind for it, so there is no readiness signal and it is never
+              auto-briefed. Two: Antigravity CLI, MiMo Code.
+            </span>
+          </li>
+        </ul>
+
+        <p class="sub rise">
+          Presets ship only where they were verified against the real tool. A permission flag nobody
+          checked could quietly disable someone’s sandbox, so herdup leaves the field blank instead
+          of guessing.
+        </p>
+        <p class="sub rise">
+          The list lives in a plain <code>registry.toml</code> you can edit, so adding a tool herdup
+          has never heard of does not require a new build.
+        </p>
+      </section>
+
+      <!-- ============================================================
+           The four shipped shapes, drawn as the pane layout each one
+           builds. The lead's pane is filled. They assemble one pane
+           at a time, because that is what a launch looks like.
+           ============================================================ -->
+      <section id="shapes">
+        <h2 class="rise">Pick how much help you want.</h2>
+        <p class="sub rise">
+          Four shipped shapes, one to six agents. Start from a size, then add or drop anyone until
+          the line-up is the one you want.
+        </p>
+
+        <div class="shapes stage" id="s-shapes">
+          <article class="shape">
+            <h3>Solo</h3>
+            <div class="panes" data-panes="1" aria-hidden="true"><i></i></div>
+            <p class="lineup">Dev</p>
+            <p>One teammate, working on its own.</p>
+          </article>
+          <article class="shape">
+            <h3>Duo</h3>
+            <div class="panes" data-panes="2" aria-hidden="true"><i></i><i></i></div>
+            <p class="lineup">Dev · Reviewer</p>
+            <p>One writes the code, one reviews everything it writes.</p>
+          </article>
+          <article class="shape">
+            <h3>Squad</h3>
+            <div class="panes" data-panes="4" aria-hidden="true">
+              <i class="lead"></i><i></i><i></i><i></i>
+            </div>
+            <p class="lineup">PM · Coder 1 · Coder 2 · QA</p>
+            <p>A lead who splits up the work, two coders, and someone testing.</p>
+          </article>
+          <article class="shape">
+            <h3>Full team</h3>
+            <div class="panes" data-panes="6" aria-hidden="true">
+              <i class="lead"></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+            <p class="lineup">PM · Coder 1 · Coder 2 · QA · Builds · Research</p>
+            <p>Everything in Squad, plus someone on builds and someone researching.</p>
+          </article>
+        </div>
+
+        <p class="sub rise">Five roles you can add to any shape, each able to run a different tool:</p>
+        <ul class="roles rise">
+          <li><b>Lead</b><span>Splits up the work and checks it</span></li>
+          <li><b>Coder</b><span>Writes and changes code</span></li>
+          <li><b>Tester</b><span>Runs the tests, reports what breaks</span></li>
+          <li><b>Builds</b><span>Keeps the build and CI green</span></li>
+          <li><b>Research</b><span>Reads docs and the web, writes notes</span></li>
+        </ul>
+        <p class="fineprint rise">Every shape is editable TOML. These are defaults, not constraints.</p>
+      </section>
+
+      <!-- ============================================================
+           The spec sheet. Not a pricing table: no tiers, no ticks
+           against things that do not exist. Every line is something
+           that runs today.
+           ============================================================ -->
+      <section id="features">
         <h2 class="rise">What it does today</h2>
-        <p class="rise">
-          herdup is a launcher, not a wrapper. You pick a project folder and a team size — one, two,
-          four or six — and add or remove teammates until the line-up is the one you want. Then it
-          builds the herdr layout, starts each agent CLI, waits until each is genuinely at its
-          prompt, and hands each one its briefing. About twenty seconds.
-        </p>
-        <p class="rise">
-          After that it gets out of the way and gives you the terminal. Once your team is running,
-          herdup is not in the loop and not between you and your tools. Several projects can run at
-          once; each launch gets its own herdr workspace, so a team working on one repo keeps going
-          while you start another.
-        </p>
-        <p class="rise">
-          It warns you before starting if the folder has no version history or has uncommitted work,
-          and it will not type into an agent that is sitting at an approval dialog. That is the
-          whole product. It is deliberately small.
-        </p>
+        <div class="matrix">
+          <div class="matrix-group rise">
+            <h3>Starting a team</h3>
+            <ul>
+              <li><b>Four shipped shapes, one to six agents</b> — Solo, Duo, Squad, Full team.</li>
+              <li><b>Add or drop anyone</b> — add a role beyond the template, dismiss a lane you do not want.</li>
+              <li><b>Swap the tool per teammate</b> — any of the 25, per pane.</li>
+              <li><b>The layout is built for you</b> — panes, splits and ratios, from the template.</li>
+              <li><b>Every agent gets a name</b> — unique within the session, so it can be driven later.</li>
+              <li><b>Each one is briefed for its role</b> — the lead last, and with the finished roster.</li>
+              <li><b>Waits for a real prompt</b> — herdup hands over only once herdr says the agent is ready for input.</li>
+            </ul>
+          </div>
+
+          <div class="matrix-group rise">
+            <h3>Refusing to do the wrong thing</h3>
+            <ul>
+              <li><b>Never types into an agent that is waiting on you</b> — only tools whose blocked state was verified are auto-briefed. Today that is Claude Code alone.</li>
+              <li><b>Held briefings are visible</b> — everything else waits behind a button you press.</li>
+              <li><b>Never touches a session you started</b> — herdup works only in its own named herdr session.</li>
+              <li><b>Stops rather than restarting your server</b> — a herdr on a different protocol is reported, not replaced.</li>
+              <li><b>Warns before agents edit</b> — uncommitted work, or a folder with no version control, acknowledged one warning at a time.</li>
+              <li><b>Never launches into a folder that is not there.</b></li>
+              <li><b>Drops flags it cannot vouch for</b> — swap a pane to another tool and unverified flags are removed, and it says so.</li>
+              <li><b>Stores no credentials</b> — GitHub goes through <code>gh</code>, which already owns a keychain-backed token.</li>
+            </ul>
+          </div>
+
+          <div class="matrix-group rise">
+            <h3>Before anything runs</h3>
+            <ul>
+              <li><b>Checks the environment</b> — herdr version, every agent CLI, and <code>gh</code>.</li>
+              <li><b>Separates blockers from things it can fix</b> — and shows the install command for what is missing.</li>
+              <li><b>First-run pass</b> — logins and folder-trust prompts cleared in one place, before the team is built.</li>
+              <li><b>Shows the plan</b> — every pane, every command, before a single agent starts.</li>
+              <li><b>Surfaces herdr’s Windows preview-beta status.</b></li>
+            </ul>
+          </div>
+
+          <div class="matrix-group rise">
+            <h3>Projects, and what happens after</h3>
+            <ul>
+              <li><b>Start from a folder, a recent, or a new repo</b> — create a private GitHub repo, clone it, and launch into it.</li>
+              <li><b>The repo can carry its own team</b> — a committed <code>.herdr/team.toml</code> is offered first when you open that project.</li>
+              <li><b>Save the team you just ran</b> — one button writes it back into the repo.</li>
+              <li><b>Hand off to a real terminal</b> — the team is yours in a normal terminal window.</li>
+              <li><b>Re-attach to a running workspace</b> — see what is live, and who is blocked.</li>
+              <li><b>Updates itself</b> — verified against herdup’s own signing key; a tampered download is refused.</li>
+              <li><b>Everything is editable TOML</b> — the tool registry, the team templates, your settings.</li>
+              <li><b>Works without the GUI</b> — <code>launcher-cli</code> plans, preflights and launches the same teams.</li>
+              <li><b>Windows, macOS and Linux</b> — free and open source.</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
       <!-- ============================================================
@@ -1183,53 +1426,6 @@
             </p>
           </div>
         </div>
-      </section>
-
-      <section id="supported">
-        <h2 class="rise">Supported tools</h2>
-        <p class="sub rise">
-          Any of these can fill any role on a team. herdup knows each one’s command, its permission
-          flags, and whether it can be briefed unattended.
-        </p>
-        <ul class="chips rise">
-          <li>Claude Code</li>
-          <li>Codex</li>
-          <li>Gemini CLI</li>
-          <li>Cursor Agent</li>
-          <li>GitHub Copilot CLI</li>
-          <li>Droid</li>
-          <li>Amp</li>
-          <li>opencode</li>
-          <li>Cline</li>
-          <li>Devin CLI</li>
-          <li>Grok CLI</li>
-          <li>Kimi Code CLI</li>
-          <li>Kilo Code CLI</li>
-          <li>Kiro CLI</li>
-          <li>Qwen Code</li>
-          <li>Qoder CLI</li>
-          <li>Antigravity CLI</li>
-          <li>Mastra Code</li>
-          <li>Hermes Agent</li>
-          <li>agy</li>
-          <li>omp</li>
-          <li>pi</li>
-          <li>maki</li>
-          <li>muse</li>
-        </ul>
-        <p class="sub rise">
-          The list lives in a plain <code>registry.toml</code> you can edit, so adding a tool herdup
-          has never heard of does not require a new build.
-        </p>
-
-        <h3 class="minor rise">One deliberate limitation</h3>
-        <p class="rise">
-          herdup only types instructions into an agent unattended when it can reliably tell the
-          agent is at its prompt rather than sitting behind a dialog. Where that has not been
-          verified, it holds the instructions and asks you to release them after a look. This
-          exists because an early version fired a briefing into a tool showing a “trust this
-          folder?” prompt, and the Enter keypress answered the dialog instead.
-        </p>
       </section>
 
       <section id="download">
