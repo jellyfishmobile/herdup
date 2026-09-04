@@ -627,7 +627,7 @@
               <li><b>Updates itself</b> — verified against herdup’s own signing key; a tampered download is refused.</li>
               <li><b>Everything is editable TOML</b> — the tool registry, the team templates, your settings.</li>
               <li><b>Works without the GUI</b> — <code>launcher-cli</code> plans, preflights and launches the same teams.</li>
-              <li><b>Windows, macOS and Linux</b> — free and open source.</li>
+              <li><b>Windows, macOS and Linux</b> — free and open source. Windows and macOS are exercised by hand; on Linux the app installs and opens.</li>
             </ul>
           </div>
         </div>
@@ -868,8 +868,8 @@
       <section id="download">
         <h2>Download</h2>
         <p class="sub">
-          Installers are built by CI for each release. Nothing is code-signed yet, so Windows
-          SmartScreen and macOS Gatekeeper will both warn you on first run.
+          Installers are built by CI for each release. Nothing is code-signed by Apple or
+          Microsoft, so Windows SmartScreen and macOS Gatekeeper will both warn you on first run.
         </p>
         <div class="dl">
           <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
@@ -880,18 +880,22 @@
           <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">macOS</span>
             <span class="file">.dmg — Apple silicon and Intel</span>
-            <span class="state warn">built, not yet exercised</span>
+            <span class="state ok">tested</span>
           </a>
           <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">Linux</span>
             <span class="file">.deb and .AppImage</span>
-            <span class="state warn">built, not yet exercised</span>
+            <span class="state warn">installs and opens</span>
           </a>
         </div>
         <p class="fineprint">
-          Honest status: herdup is developed and tested on Windows. The macOS and Linux installers
-          come from the same CI and the same commit, but nobody has yet run them on a real desktop.
-          If you try one, please
+          Honest status: Windows and macOS have both been driven by a person. On Windows a full
+          six-agent team launched end to end — 75.5 seconds, all six briefed. On macOS 26, Apple
+          silicon: the 217-test suite, the <code>launcher-cli</code> smoke against herdr 0.8.2, the
+          Terminal handoff, the packaged app launching, and in-app update end to end — install,
+          restart into the new version, and a tampered download refused. The Linux installers come
+          from the same CI and the same commit; the app installs and opens, and nothing beyond that
+          has been exercised. If you try it, please
           <a href="https://github.com/jellyfishmobile/herdup/issues">say what happened</a>.
         </p>
       </section>
