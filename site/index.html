@@ -7,13 +7,13 @@
     <meta
       name="description"
       content="The missing layer for vibe coders and small studios: herdup links your AI coding CLIs into one working team, and turns messy client requests into work that actually gets done."
-    />
+ />
     <meta property="og:title" content="herdup" />
     <meta
       property="og:description"
       content="The plumbing for AI coding agents is already here. The layer that links it together is not. herdup is that layer: automate the setup, de-chaos the client work, get things done."
-    />
-    <meta property="og:image" content="/img/hero-factory.png" />
+ />
+    <meta property="og:image" content="/img/app-team.png" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -351,17 +351,17 @@
          than implying any of it ships.
          ============================================================ -->
     <section id="argument" class="argument">
-      <p class="eyebrow rise">The argument</p>
-      <h2 class="rise big">The plumbing is already here. The layer isn&rsquo;t.</h2>
+      <p class="eyebrow">The argument</p>
+      <h2 class="big">The plumbing is already here. The layer isn&rsquo;t.</h2>
 
-      <p class="rise lead-para">
+      <p class="lead-para">
         Claude Code, Codex, Gemini, Cursor, Copilot &mdash; the agents are good and getting
         better every month. That part is solved. What is missing is the layer above them: the
         thing that links them into a team automatically, so one person can direct four agents
         instead of babysitting four terminals. Everyone is shipping better plumbing. Nobody is
         shipping the layer.
       </p>
-      <p class="rise">
+      <p>
         And there is a second gap, further out. The way work passes between a client and a small
         studio has barely changed: a message arrives on WhatsApp, someone translates it into
         tasks, someone reports back. That translation is manual, it is the bottleneck, and it is
@@ -369,32 +369,32 @@
         automate it, take the chaos out of it, and get it done.
       </p>
 
-      <h3 class="rise big sub-thesis">Your scarce resource is attention, not typing.</h3>
+      <h3 class="big sub-thesis">Your scarce resource is attention, not typing.</h3>
 
-      <p class="rise lead-para">
+      <p class="lead-para">
         One agent is a better autocomplete. That is genuinely useful, and it does not change what
         you are. A team is a different kind of thing — the work gets divided, the parts proceed at
         once, and you move from writing to deciding. Almost nobody gets that far.
       </p>
-      <p class="rise">
+      <p>
         They don’t get there because the setup cost is brutal, and the cost is paid in the wrong
         currency. Four terminals, four sets of permission flags, the same trust prompt four times,
         briefing each one by hand. People quit before the interesting part and conclude a team isn’t
         worth it — when what they actually measured was the tax.
       </p>
-      <p class="rise">
+      <p>
         The deeper point is the one worth arguing about. The bottleneck was never how fast you write
         code. It is how much context you can hold while four things happen at once. Every tool so
         far has made the typing faster and left the attention problem exactly where it was — and
         then handed you three more things to watch.
       </p>
-      <p class="rise">
+      <p>
         The direction here is the opposite of that. You say what you want, in plain language. What
         comes back is a summary a human can actually hold in their head. You stay the client. The
         team does the standing around.
       </p>
 
-      <p class="rise caveat">
+      <p class="caveat">
         This is an opinion, not a result. It is unproven, and it may be wrong. What exists today is
         the first honest piece of it — the setup cost, removed, and nothing else. The rest of the
         argument is <a href="#roadmap">on the roadmap below</a>.
@@ -406,7 +406,7 @@
          a mockup, never a render.
          ============================================================ -->
     <section class="product">
-      <p class="eyebrow rise">The actual app</p>
+      <p class="eyebrow">The actual app</p>
       <div class="shots">
         <figure class="shot">
           <img src="/img/app-project.png?v=2" alt="herdup asking which project to work on" />
@@ -430,7 +430,7 @@
           </figcaption>
         </figure>
       </div>
-      <p class="shot-note rise">
+      <p class="shot-note">
         These are screenshots of the built app, taken by its own test harness — not mockups.
       </p>
     </section>
@@ -443,13 +443,13 @@
            they are all equally automatic. They are not.
            ============================================================ -->
       <section id="tools">
-        <h2 class="rise">Twenty-five tools. One way to start them.</h2>
-        <p class="sub rise">
+        <h2>Twenty-five tools. One way to start them.</h2>
+        <p class="sub">
           Any of these can fill any role on a team. herdup knows each one’s command, its permission
           flags, and whether it can be briefed unattended.
         </p>
 
-        <ul class="toolwall rise">
+        <ul class="toolwall">
           <li class="tool auto" title="briefed automatically">Claude Code</li>
           <li class="tool plain" title="held for you">Codex</li>
           <li class="tool plain" title="held for you">Droid</li>
@@ -477,7 +477,7 @@
           <li class="tool nokind" title="no agent kind">MiMo Code</li>
         </ul>
 
-        <ul class="toolwall-key rise">
+        <ul class="toolwall-key">
           <li class="auto">
             <b>Briefed automatically</b>
             <span>Its blocked state was verified by hand. Exactly one: Claude Code.</span>
@@ -505,12 +505,12 @@
           </li>
         </ul>
 
-        <p class="sub rise">
+        <p class="sub">
           Presets ship only where they were verified against the real tool. A permission flag nobody
           checked could quietly disable someone’s sandbox, so herdup leaves the field blank instead
           of guessing.
         </p>
-        <p class="sub rise">
+        <p class="sub">
           The list lives in a plain <code>registry.toml</code> you can edit, so adding a tool herdup
           has never heard of does not require a new build.
         </p>
@@ -522,8 +522,8 @@
            at a time, because that is what a launch looks like.
            ============================================================ -->
       <section id="shapes">
-        <h2 class="rise">Pick how much help you want.</h2>
-        <p class="sub rise">
+        <h2>Pick how much help you want.</h2>
+        <p class="sub">
           Four shipped shapes, one to six agents. Start from a size, then add or drop anyone until
           the line-up is the one you want.
         </p>
@@ -559,15 +559,15 @@
           </article>
         </div>
 
-        <p class="sub rise">Five roles you can add to any shape, each able to run a different tool:</p>
-        <ul class="roles rise">
+        <p class="sub">Five roles you can add to any shape, each able to run a different tool:</p>
+        <ul class="roles">
           <li><b>Lead</b><span>Splits up the work and checks it</span></li>
           <li><b>Coder</b><span>Writes and changes code</span></li>
           <li><b>Tester</b><span>Runs the tests, reports what breaks</span></li>
           <li><b>Builds</b><span>Keeps the build and CI green</span></li>
           <li><b>Research</b><span>Reads docs and the web, writes notes</span></li>
         </ul>
-        <p class="fineprint rise">Every shape is editable TOML. These are defaults, not constraints.</p>
+        <p class="fineprint">Every shape is editable TOML. These are defaults, not constraints.</p>
       </section>
 
       <!-- ============================================================
@@ -576,9 +576,9 @@
            that runs today.
            ============================================================ -->
       <section id="features">
-        <h2 class="rise">What it does today</h2>
+        <h2>What it does today</h2>
         <div class="matrix">
-          <div class="matrix-group rise">
+          <div class="matrix-group">
             <h3>Starting a team</h3>
             <ul>
               <li><b>Four shipped shapes, one to six agents</b> — Solo, Duo, Squad, Full team.</li>
@@ -591,7 +591,7 @@
             </ul>
           </div>
 
-          <div class="matrix-group rise">
+          <div class="matrix-group">
             <h3>Refusing to do the wrong thing</h3>
             <ul>
               <li><b>Never types into an agent that is waiting on you</b> — only tools whose blocked state was verified are auto-briefed. Today that is Claude Code alone.</li>
@@ -605,7 +605,7 @@
             </ul>
           </div>
 
-          <div class="matrix-group rise">
+          <div class="matrix-group">
             <h3>Before anything runs</h3>
             <ul>
               <li><b>Checks the environment</b> — herdr version, every agent CLI, and <code>gh</code>.</li>
@@ -616,7 +616,7 @@
             </ul>
           </div>
 
-          <div class="matrix-group rise">
+          <div class="matrix-group">
             <h3>Projects, and what happens after</h3>
             <ul>
               <li><b>Start from a folder, a recent, or a new repo</b> — create a private GitHub repo, clone it, and launch into it.</li>
@@ -639,7 +639,7 @@
            use it today, and no screenshots of unbuilt UI, ever.
            ============================================================ -->
       <section id="roadmap" class="direction">
-        <div class="notice rise">
+        <div class="notice">
           <span class="tag">Roadmap</span>
           <p>
             Where herdup is going. Designed and specified, not yet shipped — everything
@@ -647,14 +647,14 @@
           </p>
         </div>
 
-        <h2 class="rise big">Hand your client the keyboard.</h2>
-        <p class="lede rise">
+        <h2 class="big">Hand your client the keyboard.</h2>
+        <p class="lede">
           Right now you are the translation layer. Your client messages you — “the login feels
           slow, and can that button be blue” — and you turn it into branches, commits and a reply.
           Both directions run through you, which means nothing moves while you sleep.
         </p>
 
-        <div class="flow rise">
+        <div class="flow">
           <div>
             <span class="n">1</span>
             <h3>Your client stays where they already are</h3>
@@ -689,7 +689,7 @@
           </div>
         </div>
 
-        <p class="rise">
+        <p>
           The point is not that you disappear. It is that you stop being the bottleneck in both
           directions — so taking on a second project, or a third, stops meaning twice or three
           times the relaying. That is what “thriving” looks like for one person doing the work of
@@ -701,35 +701,8 @@
              cannot be trusted with readable text and these have to be right.
              The poster is the still from the same prompt, so the fallback
              matches the motion. -->
-        <figure id="iso-fig" class="iso-fig rise">
-          <div class="iso-stage">
-            <img class="iso-plate" src="/img/factory.png?v=2" alt="" />
-            <div class="iso-marks" aria-hidden="true">
-              <span class="mk" style="left:9%;top:58%"><i></i><b>Your client</b><em>WhatsApp &middot; Telegram &middot; email</em></span>
-              <span class="mk" style="left:26%;top:40%"><i></i><b>Client channel</b><em>one inbox, no AI</em></span>
-              <span class="mk hinge" style="left:46%;top:22%"><i></i><b>herdupd + PM</b><em>chat becomes scoped work</em></span>
-              <span class="mk on" style="left:68%;top:38%"><i></i><b>The team</b><em>coders &middot; QA &middot; shipping today</em></span>
-              <span class="mk" style="left:84%;top:58%"><i></i><b>Board &amp; thread</b><em>kanban &middot; agent traffic</em></span>
-              <span class="mk" style="left:60%;top:80%"><i></i><b>Executive summary</b><em>status &middot; KPIs &middot; back to you</em></span>
-            </div>
-          </div>
-
-          <p class="sr-only">
-            The loop: your client sends requests from a chat app; the client channel takes them in;
-            herdupd and the PM turn them into scoped work; the team of coders and QA execute; the
-            board and thread record it; the executive summary returns to your client.
-          </p>
-
-          <figcaption>
-            Messy in, uniform out. What a client sends arrives whenever and in any shape &mdash; the
-            PM is the hinge that turns it into work the team can actually execute, and what comes
-            back to you is a summary. Only <strong>the team</strong> exists today; the launcher
-            builds it in about twenty seconds.
-          </figcaption>
-        </figure>
-
-        <!-- The linear view, kept as the close-up of the middle of that loop. -->
-        <figure id="factory" class="factory rise">
+        <!-- The line the launcher actually builds, told in the page's own language. -->
+        <figure id="factory" class="factory">
           <div class="factory-plate" aria-hidden></div>
 
           <div class="line">
@@ -777,8 +750,8 @@
           </figcaption>
         </figure>
 
-        <h3 class="minor rise">In order</h3>
-        <ol class="phases rise">
+        <h3 class="minor">In order</h3>
+        <ol class="phases">
           <li>
             <span class="ph shipped">Shipping</span>
             <div>
@@ -809,9 +782,9 @@
           </li>
         </ol>
 
-        <h3 class="minor rise">Decisions already settled</h3>
+        <h3 class="minor">Decisions already settled</h3>
         <div class="plan">
-          <article class="planned rise">
+          <article class="planned">
             <span class="pin">Planned</span>
             <h3>The Client is deliberately not an AI</h3>
             <p>
@@ -820,7 +793,7 @@
               too many.
             </p>
           </article>
-          <article class="planned rise">
+          <article class="planned">
             <span class="pin">Planned</span>
             <h3>A small local daemon holds the state</h3>
             <p>
@@ -829,7 +802,7 @@
               box.
             </p>
           </article>
-          <article class="planned rise">
+          <article class="planned">
             <span class="pin">Planned</span>
             <h3>Delegation routes through that daemon</h3>
             <p>
@@ -838,7 +811,7 @@
               date.
             </p>
           </article>
-          <article class="planned rise">
+          <article class="planned">
             <span class="pin">Planned</span>
             <h3>No mockups on this page</h3>
             <p>
@@ -849,16 +822,16 @@
           </article>
         </div>
 
-        <p class="fineprint rise">
+        <p class="fineprint">
           No dates and no waiting list — this is the direction, published so the argument above is
           complete. Follow along on <a href="https://github.com/jellyfishmobile/herdup">GitHub</a>.
         </p>
       </section>
 
       <section id="requirements">
-        <h2 class="rise">Requirements</h2>
+        <h2>Requirements</h2>
         <div class="cards">
-          <div class="card rise">
+          <div class="card">
             <h3>herdr 0.8.2 or newer</h3>
             <p>
               herdup drives <a href="https://github.com/herdr-dev/herdr">herdr</a>, the terminal
@@ -867,7 +840,7 @@
               relies on herdr’s agent API.
             </p>
           </div>
-          <div class="card rise">
+          <div class="card">
             <h3>At least one agent CLI</h3>
             <p>
               herdup starts tools you already have; it does not bundle or resell them. You need at
@@ -875,14 +848,14 @@
               costs are between you and them.
             </p>
           </div>
-          <div class="card rise">
+          <div class="card">
             <h3>git, strongly recommended</h3>
             <p>
               Not required, but these agents edit files. Without version history there is no undo,
               and herdup will warn you every time.
             </p>
           </div>
-          <div class="card rise">
+          <div class="card">
             <h3>A terminal</h3>
             <p>
               Windows Terminal on Windows (PowerShell as a fallback), Terminal.app on macOS, or
@@ -893,29 +866,29 @@
       </section>
 
       <section id="download">
-        <h2 class="rise">Download</h2>
-        <p class="sub rise">
+        <h2>Download</h2>
+        <p class="sub">
           Installers are built by CI for each release. Nothing is code-signed yet, so Windows
           SmartScreen and macOS Gatekeeper will both warn you on first run.
         </p>
         <div class="dl">
-          <a class="dlcard rise" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">Windows</span>
             <span class="file">.msi installer or .exe setup</span>
             <span class="state ok">tested</span>
           </a>
-          <a class="dlcard rise" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">macOS</span>
             <span class="file">.dmg — Apple silicon and Intel</span>
             <span class="state warn">built, not yet exercised</span>
           </a>
-          <a class="dlcard rise" href="https://github.com/jellyfishmobile/herdup/releases/latest">
+          <a class="dlcard" href="https://github.com/jellyfishmobile/herdup/releases/latest">
             <span class="os">Linux</span>
             <span class="file">.deb and .AppImage</span>
             <span class="state warn">built, not yet exercised</span>
           </a>
         </div>
-        <p class="fineprint rise">
+        <p class="fineprint">
           Honest status: herdup is developed and tested on Windows. The macOS and Linux installers
           come from the same CI and the same commit, but nobody has yet run them on a real desktop.
           If you try one, please
@@ -924,9 +897,9 @@
       </section>
 
       <section id="support">
-        <h2 class="rise">Support</h2>
+        <h2>Support</h2>
         <div class="cards">
-          <div class="card rise">
+          <div class="card">
             <h3>Bugs and questions</h3>
             <p>
               Open an issue on
@@ -935,7 +908,7 @@
               team.
             </p>
           </div>
-          <div class="card rise">
+          <div class="card">
             <h3>It isn’t finding my tool</h3>
             <p>
               herdup looks for each tool’s binary on your PATH and tells you exactly what it looked
@@ -943,7 +916,7 @@
               waiting for a release.
             </p>
           </div>
-          <div class="card rise">
+          <div class="card">
             <h3>What herdup never does</h3>
             <p>
               It does not send your code anywhere, add a service between you and your tools, or
