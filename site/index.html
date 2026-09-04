@@ -17,9 +17,481 @@
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preload" as="image" href="/img/hero-factory.png?v=3" />
-    <link rel="stylesheet" href="/styles.css?v=24" />
-    <link rel="stylesheet" href="/stage.css?v=3" />
+    <link rel="stylesheet" href="/styles.css?v=25" />
+
+    <!-- ============================================================
+         THE MOTION LAYER.
+         Every diagram on this page performs its mechanism: the
+         animation is the explanation, not decoration. It lives here
+         rather than in styles.css because the diagrams and their
+         motion are one artefact — the markup below is meaningless
+         without it, and it is meaningless without the markup.
+
+         Contract: each animated block is a .stage. An observer
+         toggles .live on it; until then every animation inside is
+         paused, so nothing runs off screen. Colours are scoped to
+         .stage/.dia under their own names, so the page stylesheet
+         owns the page and this owns the diagrams.
+         ============================================================ -->
+    <style>
+      .stage,
+      .dia {
+        --blue: #1e9bf0;
+        --blue-dim: #0e5c93;
+        --acid: #f5e63d;
+        --acid-dim: #8a8320;
+        --red: #e5484d;
+        --panel: #101012;
+        --line: #22242a;
+        --mute: #55585e;
+        --pale: #f2f2f0;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+        --cond: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+      }
+
+      /* Paused until the observer says the block is on screen. */
+      .stage * { animation-play-state: paused; }
+      .stage.live * { animation-play-state: running; }
+
+      /* The diagram frame and its caption bar. */
+      .dia {
+        position: relative;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 26px;
+      }
+      .dia::before {
+        content: attr(data-cap);
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        background: var(--blue);
+        color: #04121d;
+        font-family: var(--mono);
+        font-size: 9.5px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        padding: 7px 12px;
+      }
+      .dia.warn::before { background: var(--acid); color: #191700; }
+      .dia > .stage { margin-bottom: 22px; }
+
+      /* ── shared furniture ─────────────────────────────────── */
+      .track { position: relative; height: 74px; margin-top: 10px; }
+      .track.short { height: 58px; }
+      .trackline { position: absolute; left: 0; right: 0; top: 34px; height: 6px; }
+      .track.short .trackline { top: 26px; }
+      .trackline.blue { background: var(--blue); }
+      .trackline.acid { background: var(--acid); }
+      .trackline.soft { background: var(--blue-dim); }
+      .gates { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(4, 1fr); }
+      .gate { position: relative; display: flex; align-items: flex-start; justify-content: center; }
+      .gate i { position: absolute; top: 22px; width: 2px; height: 30px; background: var(--line); }
+      .gate span {
+        position: absolute; top: 0;
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em;
+        text-transform: uppercase; color: var(--mute); white-space: nowrap;
+      }
+      .tok {
+        position: absolute; top: 26px; height: 22px;
+        display: flex; align-items: center; padding: 0 9px;
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+        text-transform: uppercase; white-space: nowrap;
+      }
+      .track.short .tok { top: 18px; }
+      .chip {
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+        text-transform: uppercase; padding: 5px 9px; border: 1px solid var(--line); color: var(--mute);
+      }
+
+      /* ── hero: one pass against four ──────────────────────── */
+      .railhead {
+        display: flex; justify-content: space-between; align-items: baseline;
+        margin: 26px 0 0; gap: 16px; flex-wrap: wrap;
+      }
+      .railhead .who {
+        font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+      }
+      .railhead .who.blue { color: var(--blue); }
+      .railhead .who.acid { color: var(--acid-dim); }
+      .railhead .cost { font-family: var(--cond); font-size: 19px; font-weight: 600; }
+      .railhead .cost.acid { color: var(--acid-dim); }
+
+      .gate.b span { animation: gateBlue 5.6s linear infinite; }
+      .gate.b:nth-child(1) span { animation-delay: 0.55s; }
+      .gate.b:nth-child(2) span { animation-delay: 1.55s; }
+      .gate.b:nth-child(3) span { animation-delay: 2.55s; }
+      .gate.b:nth-child(4) span { animation-delay: 3.55s; }
+      @keyframes gateBlue {
+        0%, 6% { color: var(--mute); }
+        8%, 16% { color: var(--blue); }
+        22%, 100% { color: var(--mute); }
+      }
+      .gate.a span { animation: gateAcid 5.6s linear infinite; }
+      .gate.a:nth-child(1) span { animation-delay: 0.35s; }
+      .gate.a:nth-child(2) span { animation-delay: 1.75s; }
+      .gate.a:nth-child(3) span { animation-delay: 3.15s; }
+      .gate.a:nth-child(4) span { animation-delay: 4.55s; }
+      @keyframes gateAcid {
+        0%, 4% { color: var(--mute); }
+        6%, 20% { color: var(--acid); }
+        26%, 100% { color: var(--mute); }
+      }
+
+      /* one smooth pass */
+      .tok.blue { background: var(--blue); color: #04121d; }
+      .track .tok.pass { animation: runBlue 5.6s var(--ease) infinite; }
+      @keyframes runBlue {
+        0% { left: -14%; opacity: 0; }
+        5% { opacity: 1; }
+        92% { left: 96%; opacity: 1; }
+        97%, 100% { left: 100%; opacity: 0; }
+      }
+      /* four passes, each stuttering gate to gate */
+      .tok.acid { background: var(--acid); color: #191700; animation: runAcid 5.6s var(--ease) infinite; }
+      .tok.acid:nth-of-type(1) { animation-delay: 0s; }
+      .tok.acid:nth-of-type(2) { animation-delay: 1.4s; }
+      .tok.acid:nth-of-type(3) { animation-delay: 2.8s; }
+      .tok.acid:nth-of-type(4) { animation-delay: 4.2s; }
+      @keyframes runAcid {
+        0% { left: -14%; opacity: 0; }
+        4% { opacity: 1; }
+        10% { left: 6%; } 16% { left: 6%; }
+        26% { left: 30%; } 32% { left: 30%; }
+        42% { left: 54%; } 48% { left: 54%; }
+        58% { left: 78%; } 64% { left: 78%; }
+        74% { left: 96%; opacity: 1; }
+        80%, 100% { left: 100%; opacity: 0; }
+      }
+
+      /* ── 01: the stack that keeps rebuilding ──────────────── */
+      .cols { display: grid; grid-template-columns: 1fr 40px 1fr; gap: 12px; align-items: start; }
+      .col h4 {
+        margin: 0 0 10px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em;
+        text-transform: uppercase; font-weight: 500;
+      }
+      .col.a h4 { color: var(--acid-dim); }
+      .col.b h4 { color: var(--blue-dim); }
+      .row {
+        border: 1px solid; padding: 7px 9px; margin-bottom: 6px;
+        font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      }
+      .col.a .row { border-color: var(--acid-dim); color: var(--acid); animation: manual 4.4s var(--ease) infinite; }
+      .col.a .row:nth-of-type(2) { animation-delay: 0.1s; }
+      .col.a .row:nth-of-type(3) { animation-delay: 0.35s; }
+      .col.a .row:nth-of-type(4) { animation-delay: 0.6s; }
+      @keyframes manual {
+        0% { opacity: 0; transform: translateX(-8px); }
+        8% { opacity: 1; transform: none; }
+        62% { opacity: 1; transform: none; }
+        70% { opacity: 0; transform: translateX(8px); }
+        100% { opacity: 0; transform: translateX(-8px); }
+      }
+      .tally { margin-top: 10px; font-family: var(--cond); font-size: 15px; font-weight: 600; color: var(--acid); }
+      .tally i { font-style: normal; display: inline-block; animation: tally 4.4s steps(1) infinite; }
+      @keyframes tally { 0% { opacity: 0; } 10% { opacity: 1; } 100% { opacity: 1; } }
+      .arrow { align-self: center; height: 1px; background: var(--line); position: relative; top: 34px; }
+      .arrow::after {
+        content: ""; position: absolute; right: 0; top: -3px;
+        border-left: 6px solid var(--line); border-top: 3px solid transparent; border-bottom: 3px solid transparent;
+      }
+      .col.b .row { border-color: var(--blue-dim); color: var(--blue); animation: once 4.4s var(--ease) infinite; }
+      .col.b .row:nth-of-type(2) { animation-delay: 0.9s; }
+      .col.b .row:nth-of-type(3) { animation-delay: 1.1s; }
+      .col.b .row:nth-of-type(4) { animation-delay: 1.3s; }
+      .col.b .row:nth-of-type(5) { animation-delay: 1.5s; }
+      @keyframes once {
+        0%, 14% { opacity: 0; transform: translateY(6px); }
+        22% { opacity: 1; transform: none; }
+        92% { opacity: 1; transform: none; }
+        100% { opacity: 0; transform: none; }
+      }
+      .row.pick { background: var(--blue); color: #04121d; border-color: var(--blue); }
+
+      /* ── 02: the packet that gets eaten ───────────────────── */
+      .eat { position: relative; height: 176px; }
+      .lane { position: absolute; left: 0; right: 0; height: 6px; }
+      .lane.blue { top: 52px; background: var(--blue); }
+      .lane.acid { top: 132px; background: var(--acid); }
+      .lanelab {
+        position: absolute; font-family: var(--mono); font-size: 9.5px;
+        letter-spacing: 0.16em; text-transform: uppercase;
+      }
+      .lanelab.t { top: 28px; color: var(--blue); }
+      .lanelab.u { top: 150px; color: var(--acid-dim); }
+      .pkt {
+        position: absolute; height: 20px; display: flex; align-items: center; padding: 0 8px;
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+        text-transform: uppercase; white-space: nowrap;
+      }
+      .pkt.ok { top: 45px; background: var(--blue); color: #04121d; animation: deliver 4.8s var(--ease) infinite; }
+      @keyframes deliver {
+        0% { left: 0; opacity: 0; }
+        6% { opacity: 1; }
+        46% { left: 56%; opacity: 1; }
+        56% { left: 56%; opacity: 1; }
+        62%, 100% { left: 56%; opacity: 0; }
+      }
+      .dest {
+        position: absolute; top: 41px; left: 56%; z-index: 2; border: 1px solid var(--blue);
+        padding: 5px 9px; background: var(--panel);
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+        color: var(--blue); animation: landed 4.8s var(--ease) infinite;
+      }
+      @keyframes landed {
+        0%, 54% { background: var(--panel); color: var(--blue); }
+        60%, 84% { background: var(--blue); color: #04121d; }
+        92%, 100% { background: var(--panel); color: var(--blue); }
+      }
+      .pkt.bad { top: 125px; background: var(--acid); color: #191700; animation: eaten 4.8s var(--ease) infinite; }
+      @keyframes eaten {
+        0% { left: 0; opacity: 0; transform: none; }
+        6% { opacity: 1; }
+        40% { left: 36%; opacity: 1; transform: none; }
+        48% { left: 39%; opacity: 1; transform: scale(1); }
+        54% { left: 39%; opacity: 0; transform: scale(0.4); }
+        100% { left: 39%; opacity: 0; transform: scale(0.4); }
+      }
+      .jaw {
+        position: absolute; top: 108px; left: 38%; z-index: 3; padding: 6px 8px; background: var(--red); color: #fff;
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+        white-space: nowrap; transform: rotate(-3deg); animation: chomp 4.8s var(--ease) infinite;
+      }
+      @keyframes chomp {
+        0%, 40% { opacity: 0.28; transform: rotate(-3deg) scaleY(0.9); }
+        50% { opacity: 1; transform: rotate(-3deg) scaleY(1.12); }
+        62% { opacity: 1; transform: rotate(-3deg) scaleY(1); }
+        86%, 100% { opacity: 0.28; transform: rotate(-3deg) scaleY(0.9); }
+      }
+      .held {
+        position: absolute; top: 125px; left: 66%; z-index: 2; border: 1px solid var(--acid);
+        color: var(--acid); background: var(--panel); padding: 5px 9px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+        text-transform: uppercase; white-space: nowrap; opacity: 0;
+        animation: heldIn 4.8s var(--ease) infinite;
+      }
+      @keyframes heldIn {
+        0%, 58% { opacity: 0; transform: translateX(-6px); }
+        68%, 90% { opacity: 1; transform: none; }
+        100% { opacity: 0; }
+      }
+
+      /* ── 03: the line-up, assembled and edited ────────────── */
+      .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+      .lanes h4 {
+        margin: 0 0 10px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em;
+        text-transform: uppercase; font-weight: 500; color: var(--blue-dim);
+      }
+      .lanes .wcol h4 { color: var(--acid-dim); }
+      .lrow {
+        display: flex; align-items: center; gap: 8px; border: 1px solid var(--blue-dim); color: var(--blue);
+        padding: 8px 10px; margin-bottom: 6px; font-family: var(--mono); font-size: 9.5px;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        animation: laneIn 5.2s var(--ease) infinite;
+      }
+      .lrow.lead { background: var(--blue); color: #04121d; border-color: var(--blue); }
+      .lrow:nth-of-type(2) { animation-delay: 0.3s; }
+      .lrow:nth-of-type(3) { animation-delay: 0.6s; }
+      .lrow .k { margin-left: auto; opacity: 0.75; }
+      @keyframes laneIn {
+        0%, 4% { opacity: 0; transform: translateX(-8px); }
+        12% { opacity: 1; transform: none; }
+        94% { opacity: 1; transform: none; }
+        100% { opacity: 0; }
+      }
+      .lrow.drop {
+        border-style: dashed; border-color: var(--line); color: var(--mute);
+        animation: laneDrop 5.2s var(--ease) infinite; animation-delay: 0.9s;
+      }
+      @keyframes laneDrop {
+        0%, 4% { opacity: 0; transform: translateX(-8px); }
+        12% { opacity: 1; transform: none; }
+        46% { opacity: 1; transform: none; }
+        54% { opacity: 0.4; transform: translateX(12px); }
+        62%, 100% { opacity: 0; transform: translateX(20px); }
+      }
+      .warn-chip {
+        display: flex; align-items: center; gap: 8px; border: 1px solid var(--acid-dim); color: var(--acid);
+        padding: 8px 10px; margin-bottom: 6px; font-family: var(--mono); font-size: 9.5px;
+        letter-spacing: 0.12em; text-transform: uppercase;
+        animation: ackIn 5.2s var(--ease) infinite;
+      }
+      .warn-chip:nth-of-type(3) { animation-delay: 1.4s; }
+      .warn-chip .k { margin-left: auto; }
+      @keyframes ackIn {
+        0%, 14% { opacity: 0.28; }
+        30% { opacity: 1; }
+        44% { opacity: 1; border-color: var(--acid); }
+        94% { opacity: 1; }
+        100% { opacity: 0.28; }
+      }
+      .gate-note {
+        grid-column: 1 / -1; margin-top: 4px; border-top: 1px dashed var(--line); padding-top: 12px;
+        font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+        color: var(--pale);
+      }
+      .gate-note em { font-style: normal; color: var(--mute); }
+
+      /* ── 04: written out, offered back ────────────────────── */
+      .endcap {
+        position: absolute; top: 12px; padding: 6px 9px; border: 1px solid var(--blue); color: var(--blue);
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+        white-space: nowrap; background: var(--panel);
+      }
+      .endcap.right { right: 0; animation: writeLand 5.4s var(--ease) infinite; }
+      .endcap.left { left: 0; animation: offerLand 5.4s var(--ease) infinite; }
+      @keyframes writeLand {
+        0%, 40% { background: var(--panel); color: var(--blue); }
+        48%, 74% { background: var(--blue); color: #04121d; }
+        84%, 100% { background: var(--panel); color: var(--blue); }
+      }
+      @keyframes offerLand {
+        0%, 74% { background: var(--panel); color: var(--blue); }
+        82%, 94% { background: var(--blue); color: #04121d; }
+        100% { background: var(--panel); color: var(--blue); }
+      }
+      .tok.write { animation: writeOut 5.4s var(--ease) infinite; }
+      @keyframes writeOut {
+        0% { left: 0; opacity: 0; }
+        8% { opacity: 1; }
+        40% { left: 44%; opacity: 1; }
+        48% { left: 44%; opacity: 0; }
+        100% { left: 44%; opacity: 0; }
+      }
+      .tok.back { animation: offerBack 5.4s var(--ease) infinite; }
+      @keyframes offerBack {
+        0%, 50% { left: 74%; opacity: 0; }
+        56% { left: 74%; opacity: 1; }
+        80% { left: 24%; opacity: 1; }
+        88%, 100% { left: 24%; opacity: 0; }
+      }
+
+      /* ── 05: check, verify, restart ───────────────────────── */
+      .upd { position: relative; }
+      .verline {
+        display: flex; align-items: baseline; gap: 10px;
+        font-family: var(--cond); font-size: 30px; font-weight: 600; line-height: 1; height: 32px; position: relative;
+      }
+      .verline b { position: absolute; left: 0; top: 0; }
+      .verline .v-old { color: var(--mute); animation: vOld 5.6s var(--ease) infinite; }
+      .verline .v-new { color: var(--blue); animation: vNew 5.6s var(--ease) infinite; }
+      @keyframes vOld { 0%, 76% { opacity: 1; } 84%, 100% { opacity: 0; } }
+      @keyframes vNew { 0%, 76% { opacity: 0; } 84%, 100% { opacity: 1; } }
+      .feed {
+        position: absolute; right: 0; top: 0; padding: 6px 9px; border: 1px solid var(--line);
+        color: var(--mute); font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
+        text-transform: uppercase; white-space: nowrap;
+      }
+      .tok.ping {
+        background: var(--panel); border: 1px solid var(--blue-dim); color: var(--blue-dim);
+        animation: pingOut 5.6s var(--ease) infinite;
+      }
+      @keyframes pingOut {
+        0% { left: 0; opacity: 0; }
+        6% { opacity: 1; }
+        26% { left: 62%; opacity: 1; }
+        32%, 100% { left: 62%; opacity: 0; }
+      }
+      .tok.pong { background: var(--blue); color: #04121d; animation: pongBack 5.6s var(--ease) infinite; }
+      @keyframes pongBack {
+        0%, 32% { left: 62%; opacity: 0; }
+        38% { left: 62%; opacity: 1; }
+        58% { left: 0; opacity: 1; }
+        66%, 100% { left: 0; opacity: 0; }
+      }
+      .bar { position: relative; height: 6px; background: var(--line); margin-top: 14px; overflow: hidden; }
+      .bar i { position: absolute; inset: 0 auto 0 0; background: var(--blue); animation: fill 5.6s linear infinite; }
+      @keyframes fill {
+        0%, 58% { width: 0; }
+        76% { width: 100%; }
+        88% { width: 100%; }
+        90%, 100% { width: 0; }
+      }
+      .updrow {
+        display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+      }
+      .updrow .ok-chip { border-color: var(--blue-dim); color: var(--blue); animation: chipOn 5.6s var(--ease) infinite; }
+      @keyframes chipOn { 0%, 70% { opacity: 0.25; } 80%, 96% { opacity: 1; } 100% { opacity: 0.25; } }
+      .updrow .no-chip { border-color: var(--red); color: var(--red); animation: chipRefuse 5.6s var(--ease) infinite; }
+      @keyframes chipRefuse { 0%, 62% { opacity: 0.2; } 68%, 74% { opacity: 1; } 82%, 100% { opacity: 0.2; } }
+
+      /* ── 06: two sessions, one reach ──────────────────────── */
+      .iso { position: relative; height: 264px; }
+      .sess {
+        position: absolute; left: 128px; right: 0; padding: 12px 14px; border: 1px solid var(--line);
+        font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+      }
+      .sess b { display: block; font-weight: 500; }
+      .sess span { display: block; margin-top: 5px; color: var(--mute); }
+      .sess.yours { top: 0; border-style: dashed; color: var(--mute); }
+      .sess.ours { top: 96px; padding-left: 24px; border-color: var(--blue); color: var(--blue); background: rgba(30, 155, 240, 0.06); }
+      .sess.ours { animation: ownLit 5s var(--ease) infinite; }
+      @keyframes ownLit {
+        0%, 44% { background: rgba(30, 155, 240, 0.06); }
+        54%, 78% { background: rgba(30, 155, 240, 0.18); }
+        88%, 100% { background: rgba(30, 155, 240, 0.06); }
+      }
+      .origin {
+        position: absolute; left: 0; top: 62px; padding: 6px 9px; background: var(--blue); color: #04121d;
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+      }
+      .reach {
+        position: absolute; left: 74px; top: 94px; width: 8px; height: 8px; background: var(--blue);
+        border-radius: 50%; animation: reachIn 5s var(--ease) infinite;
+      }
+      @keyframes reachIn {
+        0%, 30% { left: 74px; opacity: 0; }
+        36% { left: 74px; opacity: 1; }
+        52% { left: 136px; opacity: 1; }
+        62%, 100% { left: 136px; opacity: 0; }
+      }
+      .refuse {
+        position: absolute; left: 74px; top: 22px; width: 8px; height: 8px; background: var(--red);
+        border-radius: 50%; animation: reachStop 5s var(--ease) infinite;
+      }
+      @keyframes reachStop {
+        0%, 4% { left: 74px; opacity: 0; }
+        10% { left: 74px; opacity: 1; }
+        20% { left: 112px; opacity: 1; }
+        26% { left: 112px; opacity: 1; }
+        32%, 100% { left: 112px; opacity: 0; }
+      }
+      .wall {
+        position: absolute; left: 122px; top: 0; width: 2px; height: 76px; background: var(--red);
+        opacity: 0.25; animation: wallHit 5s var(--ease) infinite;
+      }
+      @keyframes wallHit {
+        0%, 16% { opacity: 0.25; }
+        22%, 30% { opacity: 1; }
+        38%, 100% { opacity: 0.25; }
+      }
+      .isorow {
+        position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; flex-wrap: wrap;
+        font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+      }
+
+      /* Motion is the explanation, so when it is unwelcome the diagram
+         has to still say the thing. Every loop settles on its finished
+         frame instead of running. */
+      @media (prefers-reduced-motion: reduce) {
+        .stage *, .stage.live * { animation: none !important; }
+        .tok.pass { left: 40%; }
+        .tok.acid:nth-of-type(1) { left: 6%; }
+        .tok.acid:nth-of-type(2) { left: 30%; }
+        .tok.acid:nth-of-type(3) { left: 54%; }
+        .tok.acid:nth-of-type(4) { left: 78%; }
+        .pkt.ok { left: 56%; opacity: 0; }
+        .pkt.bad { opacity: 0; }
+        .held, .jaw { opacity: 1; }
+        .tok.write, .tok.ping, .tok.pong { opacity: 0; }
+        .tok.back { left: 24%; opacity: 1; }
+        .lrow.drop { opacity: 0.3; }
+        .verline .v-old { opacity: 0; }
+        .bar i { width: 100%; }
+        .reach { left: 136px; }
+        .refuse { left: 112px; }
+      }
+    </style>
   </head>
   <body>
     <header class="top">
@@ -34,119 +506,312 @@
     </header>
 
     <!-- ============================================================
-         Hero. The metaphor lands before a single word of product copy:
-         herdup is named for herding, and that is what it does.
+         Hero. Two rails, the same work down both. The blue token
+         crosses all four gates in one pass; four acid tokens each
+         stutter gate to gate. The picture is the argument.
          ============================================================ -->
     <section class="hero" id="top">
-      <div class="hero-media">
-        <img src="/img/hero-factory.png?v=3" alt="" />
-        <video id="hero-video" muted loop playsinline preload="none"
-               poster="/img/hero-factory.png?v=3" aria-hidden="true"></video>
-
-        <!-- The return leg. The model draws the factory; this draws the one
-             relationship it cannot be trusted with — that the summary goes
-             back to the client, and the whole thing is a loop. -->
-        <svg class="hero-loop" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <marker id="loop-arrow" viewBox="0 0 10 10" refX="8" refY="5"
-                    markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" />
-            </marker>
-          </defs>
-          <path d="M 86 30 C 86 39, 60 39, 40 39 C 22 39, 10 37, 8 30"
-                marker-end="url(#loop-arrow)" />
-        </svg>
-
-        <div class="hero-marks" aria-hidden="true">
-          <span class="hm" style="left:11%;top:44%"><b>Chaos in</b><em>every channel, any shape</em></span>
-          <span class="hm hinge" style="left:44%;top:26%"><b>Sorted</b><em>the PM scopes the work</em></span>
-          <span class="hm" style="left:64%;top:62%"><b>Run in parallel</b><em>several projects at once</em></span>
-          <span class="hm on" style="left:88%;top:44%"><b>You get a summary</b><em>and reply to the client</em></span>
-        </div>
-      </div>
-
-      <div class="hero-copy">
-        <h1>The missing layer for vibe coders.</h1>
+      <div class="wrap">
+        <div class="tag">herdup · the layer above the CLIs</div>
+        <h1>Four agents is not<br />four times one agent. <em>Yet.</em></h1>
         <p class="lede">
-          The AI coding CLIs are already good. What is missing is the layer above them &mdash;
-          the one that turns whatever your client sends into work a team of agents actually
-          does, and hands you back a summary.
+          The AI coding CLIs are already good. What is missing is the layer above them: the one
+          that turns whatever your client sent into work a team of agents actually does, and hands
+          you back something you can forward.
         </p>
         <div class="cta">
-          <a class="btn solid" href="#download">Download</a>
-          <a class="btn" href="#roadmap">See the whole loop</a>
+          <a class="btn" href="#download">Download</a>
+          <a class="btn ghost" href="#roadmap">See the whole loop</a>
+          <span class="meta">Windows · macOS · Linux — free, open source, needs herdr</span>
         </div>
-        <p class="fineprint">
-          Windows, macOS and Linux &middot; free and open source &middot; needs
-          <a href="https://github.com/herdr-dev/herdr">herdr</a> installed
-        </p>
+
+        <div class="stage" id="s-hero">
+          <div class="railhead">
+            <span class="who blue">herdup — one pass</span>
+            <span class="cost">75.5 s · six agents briefed</span>
+          </div>
+          <div class="track">
+            <div class="trackline blue"></div>
+            <div class="gates">
+              <div class="gate b"><span>chaos in</span><i></i></div>
+              <div class="gate b"><span>sorted</span><i></i></div>
+              <div class="gate b"><span>run in parallel</span><i></i></div>
+              <div class="gate b"><span>summary out</span><i></i></div>
+            </div>
+            <div class="tok blue pass">the whole team</div>
+          </div>
+
+          <div class="railhead">
+            <span class="who acid">by hand — once per agent</span>
+            <span class="cost acid">× 4, from memory, every time</span>
+          </div>
+          <div class="track">
+            <div class="trackline acid"></div>
+            <div class="gates">
+              <div class="gate a"><span>open a terminal</span><i></i></div>
+              <div class="gate a"><span>recall the flags</span><i></i></div>
+              <div class="gate a"><span>answer the trust prompt</span><i></i></div>
+              <div class="gate a"><span>paste the briefing</span><i></i></div>
+            </div>
+            <div class="tok acid">agent 1</div>
+            <div class="tok acid">agent 2</div>
+            <div class="tok acid">agent 3</div>
+            <div class="tok acid">agent 4</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><b>75.5 s</b><span>six agents, briefed</span></div>
+            <div class="stat"><b>217</b><span>tests behind it</span></div>
+            <div class="stat"><b>24</b><span>tools it can start</span></div>
+            <div class="stat"><b>1</b><span>briefed automatically — the rest wait for you</span></div>
+          </div>
+        </div>
       </div>
-      <div class="scroll-cue" aria-hidden>Scroll</div>
     </section>
 
-    <!-- The line that explains the picture above it, so it sits directly
-         under the hero rather than behind a WebGL section. -->
-    <section class="opening">
-      <div class="opening-in rise">
-        <span class="step">01</span>
-        <h2>Four agents is not four times one.</h2>
-        <p>
-          Four terminals. Four sets of permission flags. The same &ldquo;do you trust this
-          folder?&rdquo; question, four times. Then you brief each one by hand and hope you said the
-          same thing twice. Most people give up before finding out whether a team beats a single
-          agent.
-        </p>
+    <!-- ══ BEAT 01 — the setup tax ═══════════════════════════════
+         The manual column builds, wipes and rebuilds forever; the
+         herdup column builds once and stays. The loop is the ×4. -->
+    <section class="beat" id="b1">
+      <div class="wrap split">
+        <div>
+          <div class="no">01 — THE SETUP TAX</div>
+          <h2>The second agent is where most people quit.</h2>
+          <p class="body">
+            Four terminals. Four sets of permission flags. The same <b>do you trust this folder?</b>
+            four times. Then you brief each one by hand and hope you said the same thing twice.
+            Most people never find out whether a team beats a single agent.
+          </p>
+          <div class="ledger">
+            <div class="p"><span>Today</span>You do the setup, every time, from memory.</div>
+            <div class="s"><span>herdup</span>Pick a folder and a team shape. It builds the layout, starts each tool, waits until each is genuinely at its prompt, and hands it its briefing.</div>
+          </div>
+        </div>
+
+        <div class="dia" data-cap="One action replaces four">
+          <div class="stage cols" id="s-b1">
+            <div class="col a">
+              <h4>by hand — and again, and again</h4>
+              <div class="row">open terminal</div>
+              <div class="row">recall the flags</div>
+              <div class="row">answer trust prompt</div>
+              <div class="row">paste the briefing</div>
+              <div class="tally">× <i>4</i></div>
+            </div>
+            <div class="arrow"></div>
+            <div class="col b">
+              <h4>herdup — once</h4>
+              <div class="row pick">pick folder + team shape</div>
+              <div class="row">builds the pane layout</div>
+              <div class="row">starts each tool with its flags</div>
+              <div class="row">waits for a real prompt</div>
+              <div class="row">hands over the briefing</div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- ============================================================
-         The story. One canvas persists for the whole section: the
-         points scatter, gather, then resolve into the four lanes the
-         app actually builds. The fourth beat holds on the resolved
-         lanes and carries the thesis.
-         ============================================================ -->
-    <section id="story">
-      <canvas id="field" aria-hidden></canvas>
-      <div class="story-scrim" aria-hidden></div>
-
-
-      <div class="beat">
-        <div class="beat-in">
-          <span class="step">02</span>
-          <h2>You don’t micromanage a herd. You point it.</h2>
-          <p>
-            Pick a folder. Pick how much help you want. herdup builds the layout, starts each tool,
-            waits until each one is genuinely at its prompt, and hands it its instructions.
+    <!-- ══ BEAT 02 — the ceiling ═════════════════════════════════
+         Two identical briefings. One lands. One is eaten by the
+         dialog, and a held chip takes its place. -->
+    <section class="beat" id="b2">
+      <div class="wrap split">
+        <div>
+          <div class="no">02 — THE CEILING</div>
+          <h2>A briefing sent to a dialog answers the dialog.</h2>
+          <p class="body">
+            Every launcher that types into an agent hits the same wall: if that agent is sitting on
+            <b>do you trust this folder?</b>, your carefully written briefing becomes the answer.
+            Nobody notices until something is already running.
           </p>
+          <div class="ledger">
+            <div class="p"><span>The risk</span>Auto-briefing a tool whose blocked state you cannot read.</div>
+            <div class="s"><span>herdup</span>Only tools whose blocked-detection was verified by hand are briefed automatically. Today that is Claude Code alone. Everything else waits, visibly, for you.</div>
+          </div>
+        </div>
+
+        <div class="dia warn" data-cap="Verified, or it waits for you">
+          <div class="stage eat" id="s-b2">
+            <div class="lanelab t">verified — briefed automatically</div>
+            <div class="lane blue"></div>
+            <div class="pkt ok">briefing</div>
+            <div class="dest">claude code</div>
+
+            <div class="lane acid"></div>
+            <div class="jaw">trust dialog</div>
+            <div class="pkt bad">briefing</div>
+            <div class="held">held · you release it</div>
+            <div class="lanelab u">everything else — held for you</div>
+          </div>
         </div>
       </div>
+    </section>
 
-      <div class="beat">
-        <div class="beat-in">
-          <span class="step">03</span>
-          <h2>You see the shape before you get it.</h2>
-          <p>
-            One lane per teammate, the lead’s lane marked. Remove anyone by dismissing their lane.
-            Nothing has touched your code yet.
+    <!-- ══ BEAT 03 — the preview ═════════════════════════════════
+         The line-up assembles one lane at a time, a lane is
+         dismissed, and the warnings tick one at a time. -->
+    <section class="beat" id="b3">
+      <div class="wrap split">
+        <div>
+          <div class="no">03 — THE PREVIEW</div>
+          <h2>You see the shape before it touches your code.</h2>
+          <p class="body">
+            You cannot tell what a launcher will do until it has done it. By then it has already
+            started tools in a folder you may not have meant, with permissions you did not read.
           </p>
+          <div class="ledger">
+            <div class="p"><span>Today</span>You find out what it does by letting it do it.</div>
+            <div class="s"><span>herdup</span>One lane per teammate, the lead marked. Drop anyone by dismissing their lane. Warnings about uncommitted work or an unversioned folder are acknowledged one at a time. Nothing has run yet.</div>
+          </div>
+        </div>
+
+        <div class="dia" data-cap="Nothing has run yet">
+          <div class="stage lanes" id="s-b3">
+            <div class="lcol">
+              <h4>one lane per teammate</h4>
+              <div class="lrow lead">pm<span class="k">lead</span></div>
+              <div class="lrow">coder 1</div>
+              <div class="lrow">coder 2</div>
+              <div class="lrow drop">qa<span class="k">dismissed</span></div>
+            </div>
+            <div class="wcol">
+              <h4>one tick each</h4>
+              <div class="warn-chip">uncommitted work<span class="k">✓</span></div>
+              <div class="warn-chip">no version history<span class="k">✓</span></div>
+            </div>
+            <div class="gate-note">
+              Nothing has touched your code yet — <em>the launch button is the first thing that runs</em>
+            </div>
+          </div>
         </div>
       </div>
+    </section>
 
-      <div class="beat">
-        <div class="beat-in">
-          <span class="step">04</span>
-          <h2>The bottleneck was never typing.</h2>
-          <p>
-            It is how much you can hold in your head while four things happen at once. No amount of
-            faster typing moves that line. herdup starts at the cheapest end of the problem — the
-            attention you were spending on setup, before any work began.
+    <!-- ══ BEAT 04 — the team file ═══════════════════════════════
+         The team you ran is written into the repo, then handed
+         back the next time the project is opened. -->
+    <section class="beat" id="b4">
+      <div class="wrap split">
+        <div>
+          <div class="no">04 — THE TEAM FILE</div>
+          <h2>The team shape belongs in the repo, not in your head.</h2>
+          <p class="body">
+            The line-up that worked last time is in somebody's terminal history. Nobody else on the
+            project can see it, and neither can you, six weeks later.
           </p>
+          <div class="ledger">
+            <div class="p"><span>Today</span>The shape that worked is in somebody's terminal history.</div>
+            <div class="s"><span>herdup</span>A committed .herdr/team.toml travels with the code, and herdup offers that team first when you open the project. After a launch, one button writes the team you just ran into that file.</div>
+          </div>
+        </div>
+
+        <div class="dia" data-cap="It travels with the code">
+          <div class="stage" id="s-b4">
+            <div class="railhead">
+              <span class="who blue">after a launch</span>
+              <span class="cost">one button</span>
+            </div>
+            <div class="track short">
+              <div class="trackline blue"></div>
+              <div class="tok blue write">the team you ran</div>
+              <div class="endcap right">.herdr/team.toml</div>
+            </div>
+
+            <div class="railhead">
+              <span class="who blue">open that project again</span>
+              <span class="cost">offered first</span>
+            </div>
+            <div class="track short">
+              <div class="trackline soft"></div>
+              <div class="tok blue back">from this repo</div>
+              <div class="endcap left">your team</div>
+            </div>
+          </div>
         </div>
       </div>
+    </section>
 
-      <!-- Scroll room so the resolved lanes hold on screen before the
-           canvas leaves. Without it the payoff flashes past. -->
-      <div class="beat-hold" aria-hidden></div>
+    <!-- ══ BEAT 05 — self-update ═════════════════════════════════
+         A check goes out, a newer version comes back, the bar
+         fills, and the number it restarts into is the new one. -->
+    <section class="beat" id="b5">
+      <div class="wrap split">
+        <div>
+          <div class="no">05 — SELF-UPDATE</div>
+          <h2>It tells you when it is out of date.</h2>
+          <p class="body">
+            Nothing here is code-signed by Apple or Microsoft, so every new version has meant going
+            back to a releases page and downloading an installer your operating system distrusts.
+          </p>
+          <div class="ledger">
+            <div class="p"><span>Today</span>Unsigned installers and manual re-downloads.</div>
+            <div class="s"><span>herdup</span>It checks the release feed seconds after opening, and stays silent when the check fails. One click downloads, verifies against herdup's own signing key, replaces the app and restarts. A tampered download is refused and nothing is installed.</div>
+          </div>
+        </div>
+
+        <div class="dia" data-cap="Verified, or nothing happens">
+          <div class="stage upd" id="s-b5">
+            <div class="verline">
+              <b class="v-old">v0.1.0</b>
+              <b class="v-new">v0.1.1</b>
+            </div>
+            <div class="feed">release feed</div>
+            <div class="track short">
+              <div class="trackline soft"></div>
+              <div class="tok ping">is there a newer one?</div>
+              <div class="tok pong">0.1.1 available</div>
+            </div>
+            <div class="bar"><i></i></div>
+            <div class="updrow">
+              <span class="chip ok-chip">verified · replaced · restarted</span>
+              <span class="chip no-chip">tampered → refused, nothing installed</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ BEAT 06 — isolation ═══════════════════════════════════
+         Two sessions. herdup reaches into its own, over and over,
+         and stops at the wall in front of yours. -->
+    <section class="beat" id="b6">
+      <div class="wrap split">
+        <div>
+          <div class="no">06 — ISOLATION</div>
+          <h2>It never touches the session you started.</h2>
+          <p class="body">
+            A tool that shares your terminal session can disturb panes that are already holding real
+            work. The safe version of that is not care; it is not being in the same room.
+          </p>
+          <div class="ledger">
+            <div class="p"><span>The risk</span>A launcher sharing your session can disturb work already running in it.</div>
+            <div class="s"><span>herdup</span>It works only in its own named herdr session. Finding a server on a different protocol, it reports and stops. It never launches into a folder that does not exist. It stores no credentials; GitHub goes through gh.</div>
+          </div>
+        </div>
+
+        <div class="dia" data-cap="Its own session, or none">
+          <div class="stage iso" id="s-b6">
+            <div class="origin">herdup</div>
+            <div class="wall"></div>
+            <div class="refuse"></div>
+            <div class="sess yours">
+              <b>the session you started</b>
+              <span>your panes, your work — never touched</span>
+            </div>
+            <div class="reach"></div>
+            <div class="sess ours">
+              <b>herdup's own named session</b>
+              <span>its own socket and its own state directory</span>
+            </div>
+            <div class="isorow">
+              <span class="chip">a server on a different protocol — it reports and stops</span>
+              <span class="chip">a folder that does not exist — it never launches</span>
+              <span class="chip">no credentials stored — github goes through gh</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============================================================
@@ -332,9 +997,6 @@
         <figure id="iso-fig" class="iso-fig rise">
           <div class="iso-stage">
             <img class="iso-plate" src="/img/factory.png?v=2" alt="" />
-            <video class="iso-motion" muted loop playsinline preload="none"
-                   poster="/img/factory.png?v=2" aria-hidden="true"></video>
-
             <div class="iso-marks" aria-hidden="true">
               <span class="mk" style="left:9%;top:58%"><i></i><b>Your client</b><em>WhatsApp &middot; Telegram &middot; email</em></span>
               <span class="mk" style="left:26%;top:40%"><i></i><b>Client channel</b><em>one inbox, no AI</em></span>
@@ -646,60 +1308,17 @@
       </p>
     </footer>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-    <script src="/scroll.js?v=21"></script>
-    <script src="/pipeline.js?v=1"></script>
-    <script>
-      // The hero video is an upgrade on the still, not a requirement: it only
-      // swaps in once it can actually play, and never for reduced-motion.
-      (function () {
-        var v = document.getElementById("hero-video");
-        if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        fetch("/img/hero-factory.mp4?v=2", { method: "HEAD" })
-          .then(function (r) {
-            if (!r.ok) return;
-            v.src = "/img/hero-factory.mp4?v=2";
-            v.addEventListener("canplay", function () {
-              v.classList.add("ready");
-              if (window.ScrollTrigger) window.ScrollTrigger.refresh();
-              v.play().catch(function () {});
-            });
-            v.load();
-          })
-          .catch(function () {});
-      })();
-    </script>
 
     <script>
-      // The factory animation is an upgrade on its own poster, never a
-      // requirement: it only swaps in once it can actually play, and never for
-      // reduced-motion. Same contract as the hero video.
-      (function () {
-        var v = document.querySelector(".iso-motion");
-        if (!v || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        var start = function () {
-          v.src = "/img/factory.mp4";
-          v.addEventListener("canplay", function () {
-            v.classList.add("ready");
-            v.play().catch(function () {});
-          });
-          v.load();
-        };
-        // Only fetch 8MB once the diagram is actually approaching the viewport.
-        if ("IntersectionObserver" in window) {
-          var io = new IntersectionObserver(function (es) {
-            if (es.some(function (e) { return e.isIntersecting; })) {
-              io.disconnect();
-              start();
-            }
-          }, { rootMargin: "600px" });
-          io.observe(v);
-        } else {
-          start();
-        }
-      })();
+      // The diagrams idle until they are on screen, then perform continuously:
+      // each .stage keeps its animations paused until .live says it is visible.
+      // One observer, no libraries. prefers-reduced-motion is handled in CSS,
+      // where every loop settles on its finished frame instead.
+      const io = new IntersectionObserver(
+        (entries) => entries.forEach((e) => e.target.classList.toggle("live", e.isIntersecting)),
+        { threshold: 0.25 },
+      );
+      document.querySelectorAll(".stage").forEach((el) => io.observe(el));
     </script>
   </body>
 </html>
